@@ -52,3 +52,22 @@ export function normalizeTimes(value: unknown): TimeChoice[] {
 export function acceptsInterest(state: string): boolean {
   return state === "in_catalogue" || state === "choosing";
 }
+
+// INT-04: how well the person knows the activity. Optional.
+export const LEVELS = ["never", "can", "can_show"] as const;
+export type Level = (typeof LEVELS)[number];
+export const LEVEL_LABELS: Record<Level, string> = {
+  never: "Never tried it",
+  can: "I can do it",
+  can_show: "I can show others",
+};
+
+export function normalizeLevel(value: unknown): Level | null {
+  return LEVELS.includes(value as Level) ? (value as Level) : null;
+}
+
+/** INT-05: what the person will bring (a sewing machine, needles). Optional, short. */
+export function normalizeBringing(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value.trim().replace(/\s+/g, " ").slice(0, 120) || null;
+}

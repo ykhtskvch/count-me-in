@@ -2,7 +2,7 @@
 import { removeInterest, setInterest } from "@/db/activities";
 import { openRoundIfReady, removeOpenVotes } from "@/db/rounds";
 import { getDatabase, getSession, json, readJson, rejectCrossOrigin } from "@/db/runtime";
-import { normalizeTimes } from "@/lib/catalogue";
+import { normalizeBringing, normalizeLevel, normalizeTimes } from "@/lib/catalogue";
 
 async function signedInPerson(request: Request) {
   const session = await getSession(request);
@@ -15,12 +15,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const crossOrigin = rejectCrossOrigin(request);
   if (crossOrigin) return crossOrigin;
   const { id } = await params;
-  const payload = await readJson<{ times?: unknown }>(request);
+  const payload = await readJson<{ times?: unknown; level?: unknown; bringing?: unknown }>(request);
   const times = normalizeTimes(payload?.times);
   const who = await signedInPerson(request);
   if (who.error) return who.error;
   const db = await getDatabase();
-  const ok = await setInterest(db, id, who.person.id, times);
+  const ok = await setInterest(db, id, who.person.id, times, {
+    level: normalizeLevel(payload?.level),
+    bringing: normalizeBringing(payload?.bringing),
+  });
   if (!ok) return json({ error: "This activity isn’t taking new interest right now." }, 409);
   // TIME-01: the interest that reaches the minimum opens the picking of evenings.
   const roundOpened = Boolean(await openRoundIfReady(db, id));

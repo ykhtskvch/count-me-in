@@ -20,6 +20,12 @@ export type ActivityDetail = ActivitySummary & {
   needsKnower: boolean;
   season: string | null;
   myTimes: string[];
+  myLevel: string | null;
+  myBringing: string | null;
+  /** How many interested people can show others (INT-04). A count, never names. */
+  canShow: number;
+  /** What people said they would bring (INT-05), without saying who. */
+  bringing: string[];
 };
 
 const SELECT = `SELECT a.id, a.title, a.outcome, a.min_people AS minPeople, a.max_people AS maxPeople,
@@ -30,16 +36,32 @@ const SELECT = `SELECT a.id, a.title, a.outcome, a.min_people AS minPeople, a.ma
        WHERE i.activity_id = a.id AND p.blocked_at IS NULL) AS interested,
     (SELECT count(*) FROM interest i JOIN person p ON p.id = i.person_id
        WHERE i.activity_id = a.id AND p.blocked_at IS NULL AND p.postcode_district = ?1) AS interestedNearby,
-    (SELECT i.times FROM interest i WHERE i.activity_id = a.id AND i.person_id = ?2) AS myTimesJson
+    (SELECT i.times FROM interest i WHERE i.activity_id = a.id AND i.person_id = ?2) AS myTimesJson,
+    (SELECT i.level FROM interest i WHERE i.activity_id = a.id AND i.person_id = ?2) AS myLevel,
+    (SELECT i.bringing FROM interest i WHERE i.activity_id = a.id AND i.person_id = ?2) AS myBringing,
+    (SELECT count(*) FROM interest i JOIN person p ON p.id = i.person_id
+       WHERE i.activity_id = a.id AND p.blocked_at IS NULL AND i.level = 'can_show') AS canShow,
+    (SELECT json_group_array(i.bringing) FROM interest i JOIN person p ON p.id = i.person_id
+       WHERE i.activity_id = a.id AND p.blocked_at IS NULL AND i.bringing IS NOT NULL) AS bringingJson
   FROM activity a`;
 
-type Row = Omit<ActivityDetail, "stillNeeded" | "mine" | "myTimes" | "needsKnower"> & {
+type Row = Omit<ActivityDetail, "stillNeeded" | "mine" | "myTimes" | "needsKnower" | "bringing"> & {
   needsKnower: number;
   myTimesJson: string | null;
+  bringingJson: string | null;
 };
 
+function parseList(json: string | null): string[] {
+  try {
+    const parsed = json ? JSON.parse(json) : [];
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 function shape(row: Row): ActivityDetail {
-  const { myTimesJson, ...rest } = row;
+  const { myTimesJson, bringingJson, ...rest } = row;
   let myTimes: string[] = [];
   try {
     myTimes = myTimesJson ? (JSON.parse(myTimesJson) as string[]) : [];
@@ -52,6 +74,7 @@ function shape(row: Row): ActivityDetail {
     stillNeeded: stillNeeded(row.minPeople, row.interested),
     mine: myTimesJson !== null,
     myTimes,
+    bringing: parseList(bringingJson),
   };
 }
 
@@ -72,13 +95,19 @@ export async function getActivity(db: D1Database, id: string, viewer: { district
 }
 
 /** Adds or updates the viewer's interest. Returns false if the card no longer takes interest. */
-export async function setInterest(db: D1Database, activityId: string, personId: string, times: string[]): Promise<boolean> {
+export async function setInterest(
+  db: D1Database,
+  activityId: string,
+  personId: string,
+  times: string[],
+  details: { level?: string | null; bringing?: string | null } = {},
+): Promise<boolean> {
   const now = new Date().toISOString();
   const result = await db
-    .prepare(`INSERT INTO interest (person_id, activity_id, times)
-      SELECT ?1, id, ?3 FROM activity WHERE id = ?2 AND state IN ('in_catalogue', 'choosing')
-      ON CONFLICT(person_id, activity_id) DO UPDATE SET times = excluded.times`)
-    .bind(personId, activityId, JSON.stringify(times))
+    .prepare(`INSERT INTO interest (person_id, activity_id, times, level, bringing)
+      SELECT ?1, id, ?3, ?4, ?5 FROM activity WHERE id = ?2 AND state IN ('in_catalogue', 'choosing')
+      ON CONFLICT(person_id, activity_id) DO UPDATE SET times = excluded.times, level = excluded.level, bringing = excluded.bringing`)
+    .bind(personId, activityId, JSON.stringify(times), details.level ?? null, details.bringing ?? null)
     .run();
   if (!result.meta.changes) return false;
   await db.prepare("UPDATE activity SET last_interest_at = ?2 WHERE id = ?1").bind(activityId, now).run();

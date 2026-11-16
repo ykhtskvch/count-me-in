@@ -58,6 +58,8 @@ After changing `db/schema.ts`, run `npm run db:generate` to write a new migratio
 | `db/reports.ts`, `app/components/report-button.tsx` | One-button reports on an activity or a gathering's host, seen only by moderators; dismiss, hide or block, which signs the person out and takes them off gatherings | MOD-03, MOD-04 |
 | `db/account.ts`, `app/settings/` | Settings linked from every email; whether others going may see your name; deleting the account and its sign-in | NTF-03, INT-03, ACC-04 |
 | `db/metrics.ts` | The PRD's seven metrics on `/moderate`, counted from stored data only | 10 |
+| `db/followups.ts`, `app/after/`, `drizzle/0003_followup.sql` | The morning after a gathering: one email with two questions, answered from the link; "again" counts the person back in | GAT-07 |
+| `app/components/share-link.tsx` | Invite a friend with the activity's link | CAT-07 |
 | `lib/place-input.ts`, `db/places.ts`, `app/moderate/` | Moderator screen: the list of places with standing windows, and live gatherings with a cancel button (reason kept in the log) | 5.1, 8.4 |
 | `app/page.tsx`, `app/activity/[id]/` | Catalogue and the activity page with Count me in / I'm out | 2.1–2.3, 3.1–3.3 |
 

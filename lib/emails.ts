@@ -164,6 +164,16 @@ function draft(template: Template, f: EmailFacts): Draft {
         ],
         action: { label: "Suggest an activity", url: `${f.siteUrl}/suggest` },
       };
+    case "followup":
+      return {
+        subject: `How was ${f.title}?`,
+        lines: [
+          `${f.title} was on ${when(f)}. Two quick questions, and that’s all we’ll ask:`,
+          "Did it happen? Would you come to something like it again?",
+          "It takes two taps and helps us see what works.",
+        ],
+        action: { label: "Answer", url: `${f.siteUrl}/after?token=${f.token}` },
+      };
     case "reminder":
       return {
         subject: `Tomorrow: ${f.title}`,
