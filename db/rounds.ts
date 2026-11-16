@@ -10,6 +10,8 @@
 import { nextState } from "../lib/card-state.ts";
 import { DEFAULT_SETTINGS } from "../lib/settings.ts";
 import { type Window, proposeSlots, roundClosesAt } from "../lib/slots.ts";
+import { offerHostToNext } from "./gatherings.ts";
+import { INTERESTED_SQL, queueToPeople } from "./outbox.ts";
 
 const ACTIVE_PERSON = "JOIN person p ON p.id = v.person_id AND p.blocked_at IS NULL";
 
@@ -74,6 +76,13 @@ export async function openRoundIfReady(
         .prepare(`UPDATE activity SET state = ?2
           WHERE id = ?1 AND state = 'in_catalogue' AND EXISTS (SELECT 1 FROM round WHERE id = ?3)`)
         .bind(activityId, to, roundId),
+      queueToPeople(
+        db,
+        "round_opened",
+        { activityId, roundId },
+        `${INTERESTED_SQL(1)} AND EXISTS (SELECT 1 FROM round WHERE id = ?2)`,
+        [activityId, roundId],
+      ),
     ]);
     return opened.meta.changes ? roundId : null;
   } catch {
@@ -134,7 +143,10 @@ export async function voteSlot(
       .bind(slotId, personId, now.toISOString()),
   ]);
   if (!voted.meta.changes && !(await isOpen(db, slotId, now))) return { ok: false, reason: "closed" };
-  return { ok: true, gatheringId: await tryWin(db, slotId) };
+  const gatheringId = await tryWin(db, slotId);
+  // GAT-02 and В10 (assumption): hosting is offered straight away, alongside any venue request.
+  if (gatheringId) await offerHostToNext(db, gatheringId, now);
+  return { ok: true, gatheringId };
 }
 
 async function isOpen(db: D1Database, slotId: string, now: Date): Promise<boolean> {
@@ -178,8 +190,8 @@ async function tryWin(db: D1Database, slotId: string): Promise<string | null> {
         SELECT ?7, ?2, ?1 WHERE EXISTS (SELECT 1 FROM slot WHERE id = ?1 AND status = 'won')`),
       bind(`UPDATE slot SET status = 'closed' WHERE round_id = ?2 AND id <> ?1 AND ${won}`),
       bind(`UPDATE round SET outcome = 'won' WHERE id = ?2 AND outcome = 'open' AND ${won}`),
-      bind(`INSERT INTO attendance (gathering_id, person_id)
-        SELECT ?7, v.person_id FROM slot_vote v ${ACTIVE_PERSON}
+      bind(`INSERT INTO attendance (gathering_id, person_id, joined_at)
+        SELECT ?7, v.person_id, v.created_at FROM slot_vote v ${ACTIVE_PERSON}
         WHERE v.slot_id = ?1 AND ${won} ORDER BY v.created_at, v.person_id LIMIT ?5`),
       bind(`UPDATE interest SET queued = 1 WHERE activity_id = ?3 AND ${won}
         AND person_id NOT IN (SELECT person_id FROM attendance WHERE gathering_id = ?7)`),
@@ -205,7 +217,15 @@ export async function closeDueRounds(db: D1Database, now = new Date()): Promise<
   const back = nextState("choosing", "round_failed");
   const closed: { roundId: string; activityId: string }[] = [];
   for (const round of results) {
-    const [failed] = await db.batch([
+    // The email goes first, while the round is still open, so a second run queues nothing.
+    const [, failed] = await db.batch([
+      queueToPeople(
+        db,
+        "round_failed",
+        { activityId: round.activityId, roundId: round.roundId },
+        `${INTERESTED_SQL(1)} AND EXISTS (SELECT 1 FROM round WHERE id = ?2 AND outcome = 'open')`,
+        [round.activityId, round.roundId],
+      ),
       db.prepare("UPDATE round SET outcome = 'failed' WHERE id = ?1 AND outcome = 'open'").bind(round.roundId),
       db.prepare("UPDATE slot SET status = 'closed' WHERE round_id = ?1 AND status = 'open'").bind(round.roundId),
       db.prepare("UPDATE activity SET state = ?2 WHERE id = ?1 AND state = 'choosing'").bind(round.activityId, back),

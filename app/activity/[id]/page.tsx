@@ -37,14 +37,14 @@ type Round = {
   slots: { id: string; startsAt: string; endsAt: string; canMake: number; mine: boolean }[];
 };
 
-type Loaded = { activity: Detail; round: Round | null; signedIn: boolean } | { error: string };
+type Loaded = { activity: Detail; round: Round | null; gatheringId: string | null; signedIn: boolean } | { error: string };
 
 async function fetchActivity(id: string): Promise<Loaded> {
   try {
     const response = await fetch(`/api/activities/${encodeURIComponent(id)}`);
-    const data = (await response.json()) as { activity?: Detail; round?: Round | null; signedIn?: boolean; error?: string };
+    const data = (await response.json()) as { activity?: Detail; round?: Round | null; gatheringId?: string | null; signedIn?: boolean; error?: string };
     if (!response.ok || !data.activity) return { error: data.error ?? "This activity isn’t available." };
-    return { activity: data.activity, round: data.round ?? null, signedIn: Boolean(data.signedIn) };
+    return { activity: data.activity, round: data.round ?? null, gatheringId: data.gatheringId ?? null, signedIn: Boolean(data.signedIn) };
   } catch {
     return { error: "We couldn’t load this activity. Please refresh." };
   }
@@ -54,6 +54,7 @@ export default function ActivityPage() {
   const { id } = useParams<{ id: string }>();
   const [activity, setActivity] = useState<Detail | null>(null);
   const [round, setRound] = useState<Round | null>(null);
+  const [gatheringId, setGatheringId] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
   const [times, setTimes] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -67,6 +68,7 @@ export default function ActivityPage() {
     }
     setActivity(result.activity);
     setRound(result.round);
+    setGatheringId(result.gatheringId);
     setTimes(result.activity.myTimes);
     setSignedIn(result.signedIn);
   }, []);
@@ -94,7 +96,7 @@ export default function ActivityPage() {
   function vote(slotId: string, canMake: boolean) {
     return send(`/api/slots/${encodeURIComponent(slotId)}/vote`, canMake ? "PUT" : "DELETE", undefined, (data) =>
       data.gathering
-        ? "That evening has enough people now. It’s happening, and we’ll email everyone the details."
+        ? "That evening has enough people now. We’re confirming a host and a place, then we’ll email everyone."
         : canMake
           ? "Noted. Tick every evening you can make."
           : "Done. That evening is unticked.",
@@ -154,6 +156,10 @@ export default function ActivityPage() {
       <h1>{activity.title}</h1>
       <p className="lede">{activity.outcome}</p>
       <p className="counter" aria-live="polite">{counterText(activity)}</p>
+
+      {gatheringId && (
+        <p className="notice">An evening has enough people. <Link href={`/gathering/${gatheringId}`}>See the gathering</Link></p>
+      )}
 
       <dl className="facts">
         <dt>People</dt><dd>{activity.minPeople}–{activity.maxPeople}</dd>

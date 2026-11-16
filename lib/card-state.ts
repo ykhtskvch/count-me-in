@@ -24,7 +24,8 @@ export const CARD_EVENTS = [
   "round_failed", // picking closed without a winning slot, or no host before it closed
   "no_places_left", // every suitable venue declined or stayed silent
   "gathering_happened", // the gathering's end time passed
-  "gathering_cancelled", // moderator cancelled the gathering
+  "gathering_cancelled", // moderator cancelled the gathering, or no host could be found
+  "host_left", // the host of a booked gathering stepped down; the next person going is asked
   "removed", // moderator hid the card or the author withdrew it
 ] as const;
 
@@ -37,17 +38,21 @@ const TRANSITIONS: Record<CardState, Partial<Record<CardEvent, CardState>>> = {
     slot_won_needs_venue: "awaiting_place",
     host_confirmed_no_venue: "scheduled",
     round_failed: "in_catalogue",
+    gathering_cancelled: "in_catalogue", // a public card's gathering found no host
     removed: "removed",
   },
   awaiting_place: {
     venue_and_host_confirmed: "scheduled",
+    host_confirmed_no_venue: "scheduled", // a public card whose host stepped down got a new one
     no_places_left: "in_catalogue",
     round_failed: "in_catalogue",
+    gathering_cancelled: "in_catalogue",
     removed: "removed",
   },
   scheduled: {
     gathering_happened: "in_catalogue",
     gathering_cancelled: "in_catalogue",
+    host_left: "awaiting_place",
     removed: "removed",
   },
   removed: {},

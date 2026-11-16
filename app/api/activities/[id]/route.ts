@@ -1,4 +1,5 @@
 import { getActivity } from "@/db/activities";
+import { activeGatheringId } from "@/db/gatherings";
 import { getOpenRound } from "@/db/rounds";
 import { getDatabase, getSession, json } from "@/db/runtime";
 
@@ -12,5 +13,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   });
   if (!activity) return json({ error: "This activity isn’t available." }, 404);
   const round = activity.state === "choosing" ? await getOpenRound(db, id, session?.person?.id ?? null) : null;
-  return json({ activity, round, signedIn: Boolean(session), needsWelcome: Boolean(session && !session.person) });
+  const gatheringId = ["awaiting_place", "scheduled", "choosing"].includes(activity.state) ? await activeGatheringId(db, id) : null;
+  return json({ activity, round, gatheringId, signedIn: Boolean(session), needsWelcome: Boolean(session && !session.person) });
 }

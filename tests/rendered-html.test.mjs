@@ -98,3 +98,19 @@ test("picking an evening without signing in asks to sign in", async () => {
   const response = await render("/api/slots/some-slot/vote", { method: "PUT" });
   assert.equal(response.status, 401);
 });
+
+test("hosting page does nothing until a button is pressed", async () => {
+  const html = await (await render("/host?token=abc")).text();
+  assert.match(html, /Would you greet everyone/);
+  assert.match(html, /Not this time/);
+});
+
+test("a malformed hosting link is refused", async () => {
+  const response = await post("/api/host-offer", { token: "abc", accept: true });
+  assert.equal(response.status, 400);
+});
+
+test("joining a gathering without signing in asks to sign in", async () => {
+  const response = await render("/api/gatherings/some-gathering/attendance", { method: "PUT" });
+  assert.equal(response.status, 401);
+});

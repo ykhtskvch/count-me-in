@@ -270,3 +270,26 @@ export const session = sqliteTable(
   },
   (t) => [index("session_auth_user").on(t.authUserId)],
 );
+
+// Emails waiting to be sent (epic 7). Events queue an email here in the same transaction
+// that changes the data; the scheduler sends them through SES. The address is looked up in
+// Supabase at send time, so D1 never holds it. `payload` may hold a one-time link token
+// until the email is sent, then it is cleared.
+export const emailOutbox = sqliteTable(
+  "email_outbox",
+  {
+    id: text("id").primaryKey(),
+    personId: text("person_id").references(() => person.id, { onDelete: "cascade" }),
+    placeId: text("place_id").references(() => place.id, { onDelete: "cascade" }),
+    template: text("template").notNull(),
+    payload: text("payload").notNull().default("{}"),
+    createdAt: text("created_at").notNull().default(now),
+    sentAt: text("sent_at"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+  },
+  (t) => [
+    index("email_outbox_unsent").on(t.createdAt).where(sql`sent_at IS NULL`),
+    check("email_outbox_recipient", sql`${t.personId} IS NOT NULL OR ${t.placeId} IS NOT NULL`),
+  ],
+);
