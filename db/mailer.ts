@@ -58,6 +58,14 @@ async function loadFacts(db: D1Database, row: Row, payload: Payload, siteUrl: st
 
   const g = await getGathering(db, payload.gatheringId ?? "", row.personId);
   if (!g) return null;
+  if (row.template === "followup") {
+    const open = await db
+      .prepare("SELECT 1 AS ok FROM followup WHERE token_hash = ?1 AND answered_at IS NULL")
+      .bind(await hashSecret(payload.token ?? ""))
+      .first();
+    if (!open || g.status !== "happened") return null;
+    return { siteUrl, title: g.title, activityId: g.activityId, gatheringId: g.id, startsAt: g.startsAt, endsAt: g.endsAt, token: payload.token };
+  }
   const live = g.status === "awaiting_place" || g.status === "scheduled";
   if (row.template === "host_offer") {
     const pending = await db

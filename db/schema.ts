@@ -293,3 +293,19 @@ export const emailOutbox = sqliteTable(
     check("email_outbox_recipient", sql`${t.personId} IS NOT NULL OR ${t.placeId} IS NOT NULL`),
   ],
 );
+
+// GAT-07: one email after a gathering with two questions: did it happen, and would you
+// come again? One row per person who was going; answered once, by a one-time link.
+export const followup = sqliteTable(
+  "followup",
+  {
+    gatheringId: text("gathering_id").notNull().references(() => gathering.id, { onDelete: "cascade" }),
+    personId: text("person_id").notNull().references(() => person.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    happened: integer("happened", { mode: "boolean" }),
+    again: integer("again", { mode: "boolean" }),
+    answeredAt: text("answered_at"),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [primaryKey({ columns: [t.gatheringId, t.personId] })],
+);

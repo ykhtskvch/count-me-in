@@ -143,3 +143,9 @@ test("suggest, settings and the new moderator APIs render or refuse without an a
   }
   assert.equal((await render("/api/account", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirm: "no" }) })).status, 400);
 });
+
+test("follow-up page renders and its API refuses a malformed link", async () => {
+  assert.equal((await render("/after?token=abc")).status, 200);
+  assert.equal((await render("/api/followup?token=abc")).status, 404);
+  assert.equal((await post("/api/followup", { token: "abc", happened: true, again: true })).status, 400);
+});
