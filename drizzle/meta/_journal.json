@@ -15,6 +15,13 @@
       "when": 1794823079486,
       "tag": "0001_sign_in",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794824578099,
+      "tag": "0002_outbox",
+      "breakpoints": true
     }
   ]
 }

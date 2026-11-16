@@ -57,3 +57,9 @@ test("every state except removed is reachable and has a way out", () => {
     if (state !== "removed") assert.ok(reachableFrom(state).length > 0, `${state} is a dead end`);
   }
 });
+
+test("a host stepping down puts a booked gathering back to waiting until someone else accepts", () => {
+  assert.equal(nextState("scheduled", "host_left"), "awaiting_place");
+  assert.equal(nextState("awaiting_place", "host_confirmed_no_venue"), "scheduled");
+  assert.equal(nextState("choosing", "gathering_cancelled"), "in_catalogue");
+});
