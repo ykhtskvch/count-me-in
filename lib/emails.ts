@@ -25,6 +25,8 @@ export type EmailFacts = {
   maxPeople?: number;
   /** The rejection reason shown to a card's author. */
   note?: string;
+  /** NTF-04: the new activities in a weekly email. */
+  items?: { id: string; title: string; outcome: string }[];
 };
 
 export type RenderedEmail = { subject: string; text: string; html: string };
@@ -33,7 +35,7 @@ export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[c] ?? c);
 }
 
-type Draft = { subject: string; lines: string[]; action?: { label: string; url: string } };
+type Draft = { subject: string; lines: string[]; links?: { label: string; url: string }[]; action?: { label: string; url: string } };
 
 const FOOTER = "Count Me In is a non-profit for neighbours. No fees, no ads.";
 
@@ -164,6 +166,28 @@ function draft(template: Template, f: EmailFacts): Draft {
         ],
         action: { label: "Suggest an activity", url: `${f.siteUrl}/suggest` },
       };
+    case "followup":
+      return {
+        subject: `How was ${f.title}?`,
+        lines: [
+          `${f.title} was on ${when(f)}. Two quick questions, and that’s all we’ll ask:`,
+          "Did it happen? Would you come to something like it again?",
+          "It takes two taps and helps us see what works.",
+        ],
+        action: { label: "Answer", url: `${f.siteUrl}/after?token=${f.token}` },
+      };
+    case "digest": {
+      const items = f.items ?? [];
+      return {
+        subject: `New this week: ${items[0]?.title ?? "activities"}${items.length > 1 ? ` and ${items.length - 1} more` : ""}`,
+        lines: [
+          "Neighbours suggested these in the last week. Say Count me in to any you’d like to happen.",
+          "You get this email at most once a week because you asked for it. You can switch it off in your settings.",
+        ],
+        links: items.map((i) => ({ label: `${i.title}. ${i.outcome}`, url: `${f.siteUrl}/activity/${i.id}` })),
+        action: { label: "See all activities", url: f.siteUrl },
+      };
+    }
     case "reminder":
       return {
         subject: `Tomorrow: ${f.title}`,
@@ -178,10 +202,13 @@ export function renderEmail(template: Template, facts: EmailFacts): RenderedEmai
   const lines = d.lines.filter(Boolean);
   // NTF-03: every email to a participant links to their settings. Venues have no account.
   const footer = template.startsWith("venue_") ? FOOTER : `${FOOTER} Email settings and your account: ${facts.siteUrl}/settings`;
-  const text = [...lines, "", d.action ? `${d.action.label}: ${d.action.url}` : "", "", footer].join("\n").trim();
+  const links = d.links ?? [];
+  const text = [...lines, ...(links.length ? ["", ...links.map((l) => `- ${l.label}: ${l.url}`)] : []), "", d.action ? `${d.action.label}: ${d.action.url}` : "", "", footer].join("\n").trim();
   const html = `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1d2420;max-width:560px">${lines
     .map((l) => `<p>${escapeHtml(l)}</p>`)
     .join("")}${
+    links.length ? `<ul>${links.map((l) => `<li><a href="${escapeHtml(l.url)}">${escapeHtml(l.label)}</a></li>`).join("")}</ul>` : ""
+  }${
     d.action
       ? `<p><a href="${escapeHtml(d.action.url)}" style="display:inline-block;background:#1d2420;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px">${escapeHtml(d.action.label)}</a></p>`
       : ""

@@ -14,23 +14,23 @@ const log = (db: D1Database, actorId: string, action: string, targetId: string, 
 
 const fieldValues = (c: CardInput) => [
   c.title, c.outcome, c.minPeople, c.maxPeople, c.durationMin, c.bring, c.materialsCostPence, c.placeKind,
-  c.needsKnower ? 1 : 0, c.season, c.instructions,
+  c.needsKnower ? 1 : 0, c.season, c.instructions, c.fixedStartsAt,
 ];
 
 /**
  * CAT-03: anyone signed in suggests a card; it waits for review. A moderator's own card
  * is published straight away, which is how the starter set gets in (CAT-05).
  */
-export async function suggestCard(db: D1Database, author: { id: string; role: string }, card: CardInput): Promise<string> {
+export async function suggestCard(db: D1Database, author: { id: string; role: string }, card: CardInput, now = new Date()): Promise<string> {
   const id = crypto.randomUUID();
   const moderator = author.role === "moderator";
   const state: CardState = moderator ? nextState("in_review", "published") : "in_review";
   const statements = [
     db
       .prepare(`INSERT INTO activity (id, title, outcome, min_people, max_people, duration_min, bring, materials_cost_pence,
-          place_kind, needs_knower, season, instructions, state, author_id)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`)
-      .bind(id, ...fieldValues(card), state, author.id),
+          place_kind, needs_knower, season, instructions, fixed_starts_at, state, author_id, published_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)`)
+      .bind(id, ...fieldValues(card), state, author.id, moderator ? now.toISOString() : null),
   ];
   if (moderator) statements.push(log(db, author.id, "publish_card", id));
   await db.batch(statements);
@@ -44,7 +44,7 @@ export async function reviewQueue(db: D1Database): Promise<ReviewItem[]> {
   const { results } = await db
     .prepare(`SELECT a.id, a.title, a.outcome, a.min_people AS minPeople, a.max_people AS maxPeople,
         a.duration_min AS durationMin, a.bring, a.materials_cost_pence AS materialsCostPence, a.place_kind AS placeKind,
-        a.needs_knower AS needsKnower, a.season, a.instructions, a.created_at AS createdAt, p.display_name AS authorName
+        a.needs_knower AS needsKnower, a.season, a.instructions, a.fixed_starts_at AS fixedStartsAt, a.created_at AS createdAt, p.display_name AS authorName
       FROM activity a LEFT JOIN person p ON p.id = a.author_id
       WHERE a.state = 'in_review' ORDER BY a.created_at`)
     .all<Omit<ReviewItem, "needsKnower"> & { needsKnower: number }>();
@@ -52,7 +52,7 @@ export async function reviewQueue(db: D1Database): Promise<ReviewItem[]> {
 }
 
 /** MOD-01: publish a card, optionally with the moderator's corrections. */
-export async function publishCard(db: D1Database, actorId: string, id: string, edits: CardInput | null = null): Promise<boolean> {
+export async function publishCard(db: D1Database, actorId: string, id: string, edits: CardInput | null = null, now = new Date()): Promise<boolean> {
   const statements: D1PreparedStatement[] = [
     queueToPeople(db, "card_published", { activityId: id }, `SELECT author_id AS person_id FROM activity WHERE id = ?1
       AND state = 'in_review' AND author_id IS NOT NULL`, [id]),
@@ -61,14 +61,14 @@ export async function publishCard(db: D1Database, actorId: string, id: string, e
     statements.push(
       db
         .prepare(`UPDATE activity SET title = ?2, outcome = ?3, min_people = ?4, max_people = ?5, duration_min = ?6, bring = ?7,
-            materials_cost_pence = ?8, place_kind = ?9, needs_knower = ?10, season = ?11, instructions = ?12
+            materials_cost_pence = ?8, place_kind = ?9, needs_knower = ?10, season = ?11, instructions = ?12, fixed_starts_at = ?13
           WHERE id = ?1 AND state = 'in_review'`)
         .bind(id, ...fieldValues(edits)),
     );
   }
   const publish = db
-    .prepare("UPDATE activity SET state = ?2 WHERE id = ?1 AND state = 'in_review'")
-    .bind(id, nextState("in_review", "published"));
+    .prepare("UPDATE activity SET state = ?2, published_at = ?3 WHERE id = ?1 AND state = 'in_review'")
+    .bind(id, nextState("in_review", "published"), now.toISOString());
   statements.push(publish, log(db, actorId, edits ? "edit_and_publish_card" : "publish_card", id));
   const results = await db.batch(statements);
   return results[statements.indexOf(publish)].meta.changes > 0;

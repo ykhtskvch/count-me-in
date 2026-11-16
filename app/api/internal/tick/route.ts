@@ -3,6 +3,8 @@
 // "true", so turning the clock on does not by itself start emailing people.
 import { getSupabaseAdmin } from "@/db/auth";
 import { cancelUnreadyGatherings, completeGatherings, expireHostOffers } from "@/db/gatherings";
+import { queueDigests } from "@/db/digest";
+import { queueFollowups } from "@/db/followups";
 import { queueReminders, sendDueEmails } from "@/db/mailer";
 import { closeDueRounds } from "@/db/rounds";
 import { expireVenueRequests } from "@/db/venues";
@@ -34,6 +36,8 @@ export async function POST(request: Request) {
       gatheringsCancelled: await cancelUnreadyGatherings(db, now),
       gatheringsHappened: await completeGatherings(db, now),
       remindersQueued: await queueReminders(db, now),
+      followupsQueued: await queueFollowups(db, now),
+      digestsQueued: await queueDigests(db, now),
       emails: null as null | { sent: number; dropped: number; failed: number },
     };
     if (bindings.EMAIL_SENDING_ENABLED === "true" && bindings.PUBLIC_SITE_URL) {

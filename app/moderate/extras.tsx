@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { dateTimeText, londonDateTime } from "@/lib/slots";
 import { CardFields, type CardDraft, toPayload } from "../components/card-fields";
 
 type ReviewCard = {
   id: string; title: string; outcome: string; minPeople: number; maxPeople: number; durationMin: number; bring: string;
   materialsCostPence: number; placeKind: "venue" | "public"; needsKnower: boolean; season: string | null; instructions: string | null;
-  createdAt: string; authorName: string | null;
+  fixedStartsAt: string | null; createdAt: string; authorName: string | null;
 };
 type Report = { targetKind: "activity" | "person"; targetId: string; label: string; count: number; notes: string[] };
 type Metrics = {
@@ -47,6 +48,7 @@ const toDraft = (c: ReviewCard): CardDraft => ({
   title: c.title, outcome: c.outcome, minPeople: String(c.minPeople), maxPeople: String(c.maxPeople),
   durationHours: String(c.durationMin / 60), bring: c.bring, materialsCost: String(c.materialsCostPence / 100),
   placeKind: c.placeKind, needsKnower: c.needsKnower, season: c.season ?? "", instructions: c.instructions ?? "",
+  fixedDate: c.fixedStartsAt ? londonDateTime(c.fixedStartsAt).date : "", fixedTime: c.fixedStartsAt ? londonDateTime(c.fixedStartsAt).time : "",
 });
 
 const pct = (a: number, b: number) => (b ? `${a} of ${b} (${Math.round((a / b) * 100)}%)` : "none yet");
@@ -109,7 +111,7 @@ export function ModeratorExtras() {
           <p className="small">
             {c.minPeople}–{c.maxPeople} people · {c.durationMin / 60} h · {c.placeKind === "venue" ? "indoors" : "outdoors"}
             {c.bring ? ` · bring: ${c.bring}` : ""}{c.materialsCostPence ? ` · materials £${(c.materialsCostPence / 100).toFixed(2)}` : ""}
-            {c.needsKnower ? " · needs someone who knows how" : ""}{c.season ? ` · ${c.season}` : ""} · from {c.authorName ?? "a deleted account"}
+            {c.needsKnower ? " · needs someone who knows how" : ""}{c.season ? ` · ${c.season}` : ""}{c.fixedStartsAt ? ` · set date: ${dateTimeText(c.fixedStartsAt)}` : ""} · from {c.authorName ?? "a deleted account"}
           </p>
           {c.instructions && <p className="small">Instructions: {c.instructions}</p>}
           {editing?.id === c.id ? (

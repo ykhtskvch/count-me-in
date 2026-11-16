@@ -15,6 +15,8 @@ export const TEMPLATES = [
   "venue_cancelled", // to a venue that had approved, the gathering is off
   "card_published", // CAT-03: your suggested card is in the catalogue
   "card_rejected", // MOD-01: your suggested card was not published, and why
+  "followup", // GAT-07: the morning after, two questions
+  "digest", // NTF-04: new activities, only if asked for, at most once a week
 ] as const;
 
 export type Template = (typeof TEMPLATES)[number];

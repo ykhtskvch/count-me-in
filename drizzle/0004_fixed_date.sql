@@ -1,0 +1,1 @@
+ALTER TABLE `activity` ADD `fixed_starts_at` text;

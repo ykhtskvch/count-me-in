@@ -3,8 +3,23 @@
 // address itself is deleted from Supabase Auth by the route.
 import { leaveGathering } from "./gatherings.ts";
 
-export async function updateSettings(db: D1Database, personId: string, settings: { showName: boolean }): Promise<void> {
-  await db.prepare("UPDATE person SET show_name = ?2 WHERE id = ?1").bind(personId, settings.showName ? 1 : 0).run();
+export async function updateSettings(db: D1Database, personId: string, settings: { showName?: boolean; digest?: boolean }): Promise<void> {
+  const statements: D1PreparedStatement[] = [];
+  if (settings.showName !== undefined) {
+    statements.push(db.prepare("UPDATE person SET show_name = ?2 WHERE id = ?1").bind(personId, settings.showName ? 1 : 0));
+  }
+  if (settings.digest !== undefined) {
+    // NTF-04: the weekly email about new activities is off unless the person turns it on.
+    statements.push(
+      db.prepare("UPDATE person SET email_prefs = json_set(email_prefs, '$.digest', json(?2)) WHERE id = ?1").bind(personId, settings.digest ? "true" : "false"),
+    );
+  }
+  if (statements.length) await db.batch(statements);
+}
+
+export async function wantsDigest(db: D1Database, personId: string): Promise<boolean> {
+  const row = await db.prepare("SELECT json_extract(email_prefs, '$.digest') AS digest FROM person WHERE id = ?1").bind(personId).first<{ digest: number | null }>();
+  return row?.digest === 1;
 }
 
 /**

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { dayText, slotCounter, slotLabel } from "@/lib/slots";
+import { dateTimeText, dayText, slotCounter, slotLabel } from "@/lib/slots";
 import { counterText } from "../../components/catalogue";
 import { ReportButton } from "../../components/report-button";
+import { ShareLink } from "../../components/share-link";
 
 type Detail = {
   id: string;
@@ -25,7 +26,19 @@ type Detail = {
   timesRun: number;
   mine: boolean;
   myTimes: string[];
+  myLevel: string | null;
+  myBringing: string | null;
+  canShow: number;
+  bringing: string[];
+  fixedStartsAt: string | null;
 };
+
+const LEVELS = [
+  ["", "Prefer not to say"],
+  ["never", "Never tried it"],
+  ["can", "I can do it"],
+  ["can_show", "I can show others"],
+] as const;
 
 const TIMES = [
   ["weekday_evening", "Weekday evening"],
@@ -59,6 +72,8 @@ export default function ActivityPage() {
   const [isModerator, setIsModerator] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [times, setTimes] = useState<string[]>([]);
+  const [level, setLevel] = useState("");
+  const [bringing, setBringing] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -73,6 +88,8 @@ export default function ActivityPage() {
     setGatheringId(result.gatheringId);
     setIsModerator(result.isModerator);
     setTimes(result.activity.myTimes);
+    setLevel(result.activity.myLevel ?? "");
+    setBringing(result.activity.myBringing ?? "");
     setSignedIn(result.signedIn);
   }, []);
 
@@ -86,8 +103,9 @@ export default function ActivityPage() {
     };
   }, [id, apply]);
 
-  function save(method: "PUT" | "DELETE", nextTimes = times) {
-    return send(`/api/activities/${encodeURIComponent(id)}/interest`, method, method === "PUT" ? { times: nextTimes } : undefined, (data) =>
+  function save(method: "PUT" | "DELETE", nextTimes = times, nextLevel = level) {
+    const body = method === "PUT" ? { times: nextTimes, level: nextLevel || null, bringing } : undefined;
+    return send(`/api/activities/${encodeURIComponent(id)}/interest`, method, body, (data) =>
       data.roundOpened
         ? "You’re in, and that makes enough people. Pick the evenings you can make below."
         : method === "PUT"
@@ -171,7 +189,10 @@ export default function ActivityPage() {
         <dt>Bring</dt><dd>{activity.bring || "Nothing"}</dd>
         <dt>Materials</dt><dd>{cost}</dd>
         <dt>Someone who knows how</dt><dd>{activity.needsKnower ? "Needed" : "Not needed"}</dd>
+        {activity.fixedStartsAt && activity.state === "in_catalogue" && (<><dt>Planned for</dt><dd>{dateTimeText(activity.fixedStartsAt)}, if enough people are in</dd></>)}
         {activity.season && (<><dt>Season</dt><dd>{activity.season}</dd></>)}
+        {activity.canShow > 0 && (<><dt>Can show others</dt><dd>{activity.canShow} of those interested</dd></>)}
+        {activity.bringing.length > 0 && (<><dt>People are bringing</dt><dd>{activity.bringing.join("; ")}</dd></>)}
       </dl>
 
       {open && (
@@ -183,6 +204,19 @@ export default function ActivityPage() {
               <label htmlFor={`t-${value}`}>{label}</label>
             </div>
           ))}
+        </fieldset>
+      )}
+
+      {open && (
+        <fieldset className="times">
+          <legend>About you and this activity (optional)</legend>
+          <label htmlFor="level">Have you done this before?</label>
+          <select id="level" value={level} disabled={busy} onChange={(e) => { setLevel(e.target.value); if (activity.mine) void save("PUT", times, e.target.value); }}>
+            {LEVELS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <label htmlFor="bringing">Anything you can bring? (a sewing machine, spare needles…)</label>
+          <input id="bringing" value={bringing} maxLength={120} disabled={busy} onChange={(e) => setBringing(e.target.value)} onBlur={() => { if (activity.mine && bringing !== (activity.myBringing ?? "")) void save("PUT"); }} />
+          <p className="small">Others see how many can show and what is being brought, never who.</p>
         </fieldset>
       )}
 
@@ -212,6 +246,7 @@ export default function ActivityPage() {
       )}
       {!signedIn && open && <p className="small">You’ll be asked to sign in first. It takes one email.</p>}
       <p className="small">Only the number of people is shown. Nobody sees who else is in.</p>
+      <ShareLink title={activity.title} />
       {isModerator && (
         <p className="small">
           <button

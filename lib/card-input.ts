@@ -1,5 +1,8 @@
 // Checks a suggested activity card (backlog 1.x/8.1, PRD CAT-02, CAT-03, CAT-08).
-// Cards have no date and no address: when and where are chosen later by the platform.
+// Cards have no address: where is chosen later by the platform. A date is normally
+// chosen by the platform too, unless the proposer sets one (TIME-06).
+import { DEFAULT_SETTINGS } from "./settings.ts";
+import { londonToUtc } from "./slots.ts";
 
 export type CardInput = {
   title: string;
@@ -13,6 +16,8 @@ export type CardInput = {
   needsKnower: boolean;
   season: string | null;
   instructions: string | null;
+  /** TIME-06: optional date and time the proposer wants, as a UTC instant. */
+  fixedStartsAt: string | null;
 };
 
 type Result = { ok: true; card: CardInput } | { ok: false; fields: Record<string, string> };
@@ -31,7 +36,7 @@ export const REJECTION_REASONS = {
 
 export type RejectionReason = keyof typeof REJECTION_REASONS;
 
-export function normalizeCard(raw: unknown): Result {
+export function normalizeCard(raw: unknown, now = new Date()): Result {
   const input = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const fields: Record<string, string> = {};
 
@@ -58,10 +63,27 @@ export function normalizeCard(raw: unknown): Result {
   const placeKind = input.placeKind === "venue" || input.placeKind === "public" ? input.placeKind : null;
   if (!placeKind) fields.placeKind = "Choose indoor venue or public place.";
 
+  // TIME-06: a set date must leave time to gather people and for picking to close.
+  let fixedStartsAt: string | null = null;
+  const date = text(input.fixedDate, 10);
+  const time = text(input.fixedTime, 5);
+  if (date || time) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+      fields.fixedDate = "Give both a date and a start time, or leave both empty.";
+    } else {
+      const at = londonToUtc(date, time);
+      const days = (at.getTime() - now.getTime()) / 86400000;
+      if (!Number.isFinite(days) || days < DEFAULT_SETTINGS.slot_earliest_days || days > 90) {
+        fields.fixedDate = `Choose a date between ${DEFAULT_SETTINGS.slot_earliest_days} and 90 days from now.`;
+      } else fixedStartsAt = at.toISOString();
+    }
+  }
+
   if (Object.keys(fields).length) return { ok: false, fields };
   return {
     ok: true,
     card: {
+      fixedStartsAt,
       title,
       outcome,
       minPeople,
