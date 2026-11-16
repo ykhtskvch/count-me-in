@@ -51,6 +51,10 @@ export const activity = sqliteTable(
     rejectionReason: text("rejection_reason"),
     timesRun: integer("times_run").notNull().default(0),
     lastInterestAt: text("last_interest_at"),
+    // TIME-06: a date the proposer set (UTC ISO). The minimum still applies.
+    fixedStartsAt: text("fixed_starts_at"),
+    // When it entered the catalogue; the weekly email lists cards newer than a week (NTF-04).
+    publishedAt: text("published_at"),
     createdAt: text("created_at").notNull().default(now),
   },
   (t) => [

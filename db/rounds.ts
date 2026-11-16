@@ -9,7 +9,7 @@
 // Every multi-step change is one D1 batch, which runs as a single transaction.
 import { nextState } from "../lib/card-state.ts";
 import { DEFAULT_SETTINGS } from "../lib/settings.ts";
-import { type Window, proposeSlots, roundClosesAt } from "../lib/slots.ts";
+import { type ProposedSlot, type Window, fixedDateUsable, kindOf, londonParts, proposeSlots, roundClosesAt } from "../lib/slots.ts";
 import { offerHostToNext } from "./gatherings.ts";
 import { requestNextVenue } from "./venues.ts";
 import { INTERESTED_SQL, queueToPeople } from "./outbox.ts";
@@ -27,10 +27,11 @@ export async function openRoundIfReady(
   settings = DEFAULT_SETTINGS,
 ): Promise<string | null> {
   const card = await db
-    .prepare(`SELECT a.state, a.min_people AS minPeople, a.duration_min AS durationMin, a.place_kind AS placeKind
+    .prepare(`SELECT a.state, a.min_people AS minPeople, a.duration_min AS durationMin, a.place_kind AS placeKind,
+        a.fixed_starts_at AS fixedStartsAt
       FROM activity a WHERE a.id = ?1`)
     .bind(activityId)
-    .first<{ state: string; minPeople: number; durationMin: number; placeKind: "venue" | "public" }>();
+    .first<{ state: string; minPeople: number; durationMin: number; placeKind: "venue" | "public"; fixedStartsAt: string | null }>();
   if (!card || card.state !== "in_catalogue") return null;
 
   const { results: interests } = await db
@@ -50,13 +51,19 @@ export async function openRoundIfReady(
     windows = results;
   }
 
-  const slots = proposeSlots({
-    now,
-    durationMin: card.durationMin,
-    interestTimes: interests.map((i) => parseTimes(i.times)),
-    windows,
-    settings,
-  });
+  // TIME-06: the proposer's own date is the only slot, while it is still far enough away
+  // for picking to stay open at least a day. After that, the platform proposes as usual.
+  const fixed = card.fixedStartsAt ? Date.parse(card.fixedStartsAt) : NaN;
+  const fixedUsable = fixedDateUsable(card.fixedStartsAt, now, settings);
+  const slots: ProposedSlot[] = fixedUsable
+    ? [{ startsAt: card.fixedStartsAt!, endsAt: new Date(fixed + card.durationMin * 60000).toISOString(), kind: kindOf(londonParts(new Date(fixed)).weekday) }]
+    : proposeSlots({
+        now,
+        durationMin: card.durationMin,
+        interestTimes: interests.map((i) => parseTimes(i.times)),
+        windows,
+        settings,
+      });
   if (slots.length === 0) return null;
 
   const roundId = crypto.randomUUID();

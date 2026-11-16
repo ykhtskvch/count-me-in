@@ -13,11 +13,14 @@ export type CardDraft = {
   needsKnower: boolean;
   season: string;
   instructions: string;
+  /** TIME-06: optional date and start time (London) the proposer wants. */
+  fixedDate: string;
+  fixedTime: string;
 };
 
 export const EMPTY_CARD: CardDraft = {
   title: "", outcome: "", minPeople: "3", maxPeople: "8", durationHours: "2", bring: "", materialsCost: "0",
-  placeKind: "venue", needsKnower: false, season: "", instructions: "",
+  placeKind: "venue", needsKnower: false, season: "", instructions: "", fixedDate: "", fixedTime: "",
 };
 
 export function toPayload(d: CardDraft) {
@@ -62,6 +65,14 @@ export function CardFields({ draft, onChange, fields, idPrefix = "c" }: {
       <input id={id("season")} value={draft.season} onChange={(e) => set("season", e.target.value)} maxLength={40} />
       <label htmlFor={id("instr")}>Simple instructions, so beginners manage without an expert (optional)</label>
       <textarea id={id("instr")} value={draft.instructions} onChange={(e) => set("instructions", e.target.value)} maxLength={2000} rows={4} />
+      <fieldset className="times">
+        <legend>A set date (optional)</legend>
+        <p className="small">Leave empty and we’ll offer evenings once enough people are in. If you set a date, it still only happens if enough people can make it.</p>
+        <label htmlFor={id("date")}>Date</label>
+        <input id={id("date")} type="date" value={draft.fixedDate} onChange={(e) => set("fixedDate", e.target.value)} />
+        <label htmlFor={id("time")}>Start time</label>
+        <input id={id("time")} type="time" value={draft.fixedTime} onChange={(e) => set("fixedTime", e.target.value)} />{err("fixedDate")}
+      </fieldset>
     </>
   );
 }

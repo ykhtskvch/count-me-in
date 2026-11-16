@@ -60,6 +60,9 @@ After changing `db/schema.ts`, run `npm run db:generate` to write a new migratio
 | `db/metrics.ts` | The PRD's seven metrics on `/moderate`, counted from stored data only | 10 |
 | `db/followups.ts`, `app/after/`, `drizzle/0003_followup.sql` | The morning after a gathering: one email with two questions, answered from the link; "again" counts the person back in | GAT-07 |
 | `app/components/share-link.tsx` | Invite a friend with the activity's link | CAT-07 |
+| `lib/catalogue.ts` (`isStale`) | A card nobody has shown interest in for 30 days is not removed, it sinks below the others | CAT-06 |
+| `lib/card-input.ts`, `db/rounds.ts`, `drizzle/0004_fixed_date.sql` | The proposer may set a date and start time (7 to 90 days ahead); it becomes the only evening offered and the minimum still applies; if the date gets too close, the platform offers its own evenings | TIME-06 |
+| `db/digest.ts`, `drizzle/0005_published_at.sql` | Weekly email about new activities: off unless switched on in `/settings`, Monday morning, at most once a week, only when there is something new for that person | NTF-04 |
 | `lib/place-input.ts`, `db/places.ts`, `app/moderate/` | Moderator screen: the list of places with standing windows, and live gatherings with a cancel button (reason kept in the log) | 5.1, 8.4 |
 | `app/page.tsx`, `app/activity/[id]/` | Catalogue and the activity page with Count me in / I'm out | 2.1–2.3, 3.1–3.3 |
 

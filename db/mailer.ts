@@ -6,6 +6,7 @@
 // round closed, the gathering was cancelled) is dropped, not sent late.
 import { renderEmail, type EmailFacts } from "../lib/emails.ts";
 import { DEFAULT_SETTINGS } from "../lib/settings.ts";
+import { digestItems } from "./digest.ts";
 import { getGathering } from "./gatherings.ts";
 import { GOING_SQL, type Template, queueToPeople } from "./outbox.ts";
 import { hashSecret } from "./runtime.ts";
@@ -30,7 +31,7 @@ type Row = {
   placeEmail: string | null;
   attempts: number;
 };
-type Payload = { activityId?: string; roundId?: string; gatheringId?: string; token?: string; deadlineAt?: string; reason?: "no_host" | "no_place" | "moderator" };
+type Payload = { activityId?: string; roundId?: string; gatheringId?: string; token?: string; deadlineAt?: string; reason?: "no_host" | "no_place" | "moderator"; since?: string };
 
 /** The facts an email needs, or null when it is no longer relevant and should be dropped. */
 async function loadFacts(db: D1Database, row: Row, payload: Payload, siteUrl: string): Promise<EmailFacts | null> {
@@ -43,6 +44,12 @@ async function loadFacts(db: D1Database, row: Row, payload: Payload, siteUrl: st
     if (!round) return null;
     if (row.template === "round_opened" && round.outcome !== "open") return null;
     return { siteUrl, title: round.title, activityId: round.activityId, closesAt: round.closesAt };
+  }
+
+  if (row.template === "digest") {
+    // Loaded at send time, so a card removed since, or interest given since, is left out.
+    const items = row.personId ? await digestItems(db, row.personId, payload.since ?? "") : [];
+    return items.length ? { siteUrl, title: "", activityId: "", items } : null;
   }
 
   if (row.template.startsWith("venue_")) return venueFacts(db, row, payload, siteUrl);

@@ -156,6 +156,22 @@ export function dateTimeText(at: string): string {
   return `${dayText(at)}, ${timeLabel.format(new Date(at))}`;
 }
 
+/**
+ * TIME-06: a date the proposer set is used while it is far enough away for picking
+ * to stay open at least a day. After that the platform proposes evenings as usual.
+ */
+export function fixedDateUsable(fixedStartsAt: string | null, now: Date, settings: Pick<SlotSettings, "round_close_days_before"> = DEFAULT_SETTINGS): boolean {
+  if (!fixedStartsAt) return false;
+  return Date.parse(fixedStartsAt) - now.getTime() > (settings.round_close_days_before + 1) * 24 * 60 * 60 * 1000;
+}
+
+/** London date and time of an instant, for form fields. */
+export function londonDateTime(at: string): { date: string; time: string } {
+  const d = new Date(at);
+  const parts = londonParts(d);
+  return { date: parts.date, time: new Date(d.getTime() + parts.offsetMin * 60000).toISOString().slice(11, 16) };
+}
+
 /** "3 can make it · 1 more needed" for one offered evening. */
 export function slotCounter(canMake: number, minPeople: number): string {
   const more = Math.max(0, minPeople - canMake);

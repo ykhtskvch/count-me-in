@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { dayText, slotCounter, slotLabel } from "@/lib/slots";
+import { dateTimeText, dayText, slotCounter, slotLabel } from "@/lib/slots";
 import { counterText } from "../../components/catalogue";
 import { ReportButton } from "../../components/report-button";
 import { ShareLink } from "../../components/share-link";
@@ -30,6 +30,7 @@ type Detail = {
   myBringing: string | null;
   canShow: number;
   bringing: string[];
+  fixedStartsAt: string | null;
 };
 
 const LEVELS = [
@@ -188,6 +189,7 @@ export default function ActivityPage() {
         <dt>Bring</dt><dd>{activity.bring || "Nothing"}</dd>
         <dt>Materials</dt><dd>{cost}</dd>
         <dt>Someone who knows how</dt><dd>{activity.needsKnower ? "Needed" : "Not needed"}</dd>
+        {activity.fixedStartsAt && activity.state === "in_catalogue" && (<><dt>Planned for</dt><dd>{dateTimeText(activity.fixedStartsAt)}, if enough people are in</dd></>)}
         {activity.season && (<><dt>Season</dt><dd>{activity.season}</dd></>)}
         {activity.canShow > 0 && (<><dt>Can show others</dt><dd>{activity.canShow} of those interested</dd></>)}
         {activity.bringing.length > 0 && (<><dt>People are bringing</dt><dd>{activity.bringing.join("; ")}</dd></>)}

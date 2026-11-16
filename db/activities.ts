@@ -1,6 +1,8 @@
 // Catalogue and interest queries. Other people's names never leave this file:
 // the API returns counts only (INT-03).
 import { type CatalogueItem, sortCatalogue, stillNeeded } from "../lib/catalogue.ts";
+import { DEFAULT_SETTINGS } from "../lib/settings.ts";
+import { fixedDateUsable } from "../lib/slots.ts";
 
 export const PUBLIC_STATES = ["in_catalogue", "choosing", "awaiting_place", "scheduled"] as const;
 
@@ -20,6 +22,8 @@ export type ActivityDetail = ActivitySummary & {
   needsKnower: boolean;
   season: string | null;
   myTimes: string[];
+  /** TIME-06: the date the proposer set, if any. */
+  fixedStartsAt: string | null;
   myLevel: string | null;
   myBringing: string | null;
   /** How many interested people can show others (INT-04). A count, never names. */
@@ -31,7 +35,7 @@ export type ActivityDetail = ActivitySummary & {
 const SELECT = `SELECT a.id, a.title, a.outcome, a.min_people AS minPeople, a.max_people AS maxPeople,
     a.duration_min AS durationMin, a.place_kind AS placeKind, a.state, a.times_run AS timesRun,
     a.bring, a.materials_cost_pence AS materialsCostPence, a.needs_knower AS needsKnower, a.season,
-    a.created_at AS createdAt, a.last_interest_at AS lastInterestAt,
+    a.created_at AS createdAt, a.last_interest_at AS lastInterestAt, a.fixed_starts_at AS fixedStartsAt,
     (SELECT count(*) FROM interest i JOIN person p ON p.id = i.person_id
        WHERE i.activity_id = a.id AND p.blocked_at IS NULL) AS interested,
     (SELECT count(*) FROM interest i JOIN person p ON p.id = i.person_id
@@ -78,20 +82,23 @@ function shape(row: Row): ActivityDetail {
   };
 }
 
-export async function listCatalogue(db: D1Database, viewer: { district: string | null; personId: string | null }) {
+export async function listCatalogue(db: D1Database, viewer: { district: string | null; personId: string | null }, now = new Date()) {
   const { results } = await db
     .prepare(`${SELECT} WHERE a.state IN (${PUBLIC_STATES.map((s) => `'${s}'`).join(", ")})`)
     .bind(viewer.district ?? "", viewer.personId ?? "")
     .all<Row>();
-  return sortCatalogue(results.map(shape));
+  return sortCatalogue(results.map(shape), now, DEFAULT_SETTINGS.stale_after_days);
 }
 
-export async function getActivity(db: D1Database, id: string, viewer: { district: string | null; personId: string | null }) {
+export async function getActivity(db: D1Database, id: string, viewer: { district: string | null; personId: string | null }, now = new Date()) {
   const row = await db
     .prepare(`${SELECT} WHERE a.id = ?3 AND a.state IN (${PUBLIC_STATES.map((s) => `'${s}'`).join(", ")}) LIMIT 1`)
     .bind(viewer.district ?? "", viewer.personId ?? "", id)
     .first<Row>();
-  return row ? shape(row) : null;
+  if (!row) return null;
+  const detail = shape(row);
+  // A set date that is past or too close is no longer promised (TIME-06).
+  return { ...detail, fixedStartsAt: fixedDateUsable(detail.fixedStartsAt, now) ? detail.fixedStartsAt : null };
 }
 
 /** Adds or updates the viewer's interest. Returns false if the card no longer takes interest. */

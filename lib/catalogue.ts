@@ -20,9 +20,23 @@ export function stillNeeded(minPeople: number, interested: number): number {
   return Math.max(0, minPeople - interested);
 }
 
-/** Nearby first; among them, the ones closest to their minimum; then newest. */
-export function sortCatalogue<T extends CatalogueItem>(items: readonly T[]): T[] {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** CAT-06: a card nobody has shown interest in for `staleAfterDays` is not removed, it sinks. */
+export function isStale(item: Pick<CatalogueItem, "createdAt" | "lastInterestAt">, now: Date, staleAfterDays: number): boolean {
+  const last = Date.parse(item.lastInterestAt ?? item.createdAt);
+  return now.getTime() - last > staleAfterDays * DAY_MS;
+}
+
+/**
+ * Nearby first; among them, the ones closest to their minimum; then newest.
+ * Cards with no interest for a long time go below all the others (CAT-06).
+ */
+export function sortCatalogue<T extends CatalogueItem>(items: readonly T[], now = new Date(), staleAfterDays = 30): T[] {
   return [...items].sort((a, b) => {
+    const staleA = isStale(a, now, staleAfterDays) ? 1 : 0;
+    const staleB = isStale(b, now, staleAfterDays) ? 1 : 0;
+    if (staleA !== staleB) return staleA - staleB;
     const nearA = a.interestedNearby > 0 ? 0 : 1;
     const nearB = b.interestedNearby > 0 ? 0 : 1;
     if (nearA !== nearB) return nearA - nearB;

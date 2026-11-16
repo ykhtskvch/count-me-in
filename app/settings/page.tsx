@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type Settings = { displayName: string; postcodeDistrict: string; showName: boolean; role: string };
+type Settings = { displayName: string; postcodeDistrict: string; showName: boolean; digest: boolean; role: string };
 type Loaded = { settings: Settings } | { status: number };
 
 async function load(): Promise<Loaded> {
@@ -33,15 +33,15 @@ export default function SettingsPage() {
     };
   }, []);
 
-  async function setShowName(showName: boolean) {
+  async function change(patch: { showName?: boolean; digest?: boolean }) {
     setBusy(true);
     try {
       const response = await fetch("/api/settings", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ showName }),
+        body: JSON.stringify(patch),
       });
-      if (response.ok && loaded && "settings" in loaded) setLoaded({ settings: { ...loaded.settings, showName } });
+      if (response.ok && loaded && "settings" in loaded) setLoaded({ settings: { ...loaded.settings, ...patch } });
       setMessage(response.ok ? "Saved." : "That didn’t save. Please try again.");
     } finally {
       setBusy(false);
@@ -84,11 +84,15 @@ export default function SettingsPage() {
         <dt>Area</dt><dd>{s.postcodeDistrict}</dd>
       </dl>
       <div className="check">
-        <input id="show-name" type="checkbox" checked={s.showName} onChange={(e) => setShowName(e.target.checked)} disabled={busy} />
+        <input id="show-name" type="checkbox" checked={s.showName} onChange={(e) => change({ showName: e.target.checked })} disabled={busy} />
         <label htmlFor="show-name">Others going to the same gathering may see my name</label>
       </div>
       <h2>Emails</h2>
-      <p className="small">We only email about activities you said Count me in to: evenings to pick, a gathering that’s on or off, and a reminder the day before. No newsletters, no adverts. If you don’t want these emails, take back your interest, or delete your account.</p>
+      <p className="small">We only email about activities you said Count me in to: evenings to pick, a gathering that’s on or off, and a reminder the day before. No adverts. If you don’t want these emails, take back your interest, or delete your account.</p>
+      <div className="check">
+        <input id="digest" type="checkbox" checked={s.digest} onChange={(e) => change({ digest: e.target.checked })} disabled={busy} />
+        <label htmlFor="digest">Also email me when there are new activities, at most once a week</label>
+      </div>
       {message && <p className="notice" role="status">{message}</p>}
       <h2>Delete my account</h2>
       <p className="small">This removes your name, area, interest and gatherings from Count Me In and deletes your sign-in. Activities you suggested stay, without your name. It can’t be undone.</p>
