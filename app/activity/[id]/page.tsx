@@ -1,0 +1,163 @@
+"use client";
+
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { counterText } from "../../components/catalogue";
+
+type Detail = {
+  id: string;
+  title: string;
+  outcome: string;
+  minPeople: number;
+  maxPeople: number;
+  durationMin: number;
+  bring: string;
+  materialsCostPence: number;
+  placeKind: "venue" | "public";
+  needsKnower: boolean;
+  season: string | null;
+  state: string;
+  interested: number;
+  stillNeeded: number;
+  timesRun: number;
+  mine: boolean;
+  myTimes: string[];
+};
+
+const TIMES = [
+  ["weekday_evening", "Weekday evening"],
+  ["saturday", "Saturday"],
+  ["sunday", "Sunday"],
+] as const;
+
+type Loaded = { activity: Detail; signedIn: boolean } | { error: string };
+
+async function fetchActivity(id: string): Promise<Loaded> {
+  try {
+    const response = await fetch(`/api/activities/${encodeURIComponent(id)}`);
+    const data = (await response.json()) as { activity?: Detail; signedIn?: boolean; error?: string };
+    if (!response.ok || !data.activity) return { error: data.error ?? "This activity isn’t available." };
+    return { activity: data.activity, signedIn: Boolean(data.signedIn) };
+  } catch {
+    return { error: "We couldn’t load this activity. Please refresh." };
+  }
+}
+
+export default function ActivityPage() {
+  const { id } = useParams<{ id: string }>();
+  const [activity, setActivity] = useState<Detail | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
+  const [times, setTimes] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const apply = useCallback((result: Loaded) => {
+    if ("error" in result) {
+      setError(result.error);
+      return;
+    }
+    setActivity(result.activity);
+    setTimes(result.activity.myTimes);
+    setSignedIn(result.signedIn);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchActivity(id).then((result) => {
+      if (!cancelled) apply(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, apply]);
+
+  async function save(method: "PUT" | "DELETE", nextTimes = times) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/activities/${encodeURIComponent(id)}/interest`, {
+        method,
+        headers: { "content-type": "application/json" },
+        body: method === "PUT" ? JSON.stringify({ times: nextTimes }) : undefined,
+      });
+      const data = (await response.json()) as { error?: string; needsWelcome?: boolean };
+      if (response.status === 401) {
+        window.location.assign(`/signin?next=${encodeURIComponent(`/activity/${id}`)}`);
+        return;
+      }
+      if (data.needsWelcome) {
+        window.location.assign(`/welcome?next=${encodeURIComponent(`/activity/${id}`)}`);
+        return;
+      }
+      if (!response.ok) {
+        setError(data.error ?? "That didn’t work. Please try again.");
+        return;
+      }
+      setNotice(method === "PUT" ? "You’re in. We’ll email you when enough people join." : "Done. You’re no longer counted.");
+      apply(await fetchActivity(id));
+    } catch {
+      setError("The service is unavailable. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleTime(value: string) {
+    const next = times.includes(value) ? times.filter((t) => t !== value) : [...times, value];
+    setTimes(next);
+    if (activity?.mine) void save("PUT", next);
+  }
+
+  if (error && !activity) {
+    return <main><p className="form-error" role="alert">{error}</p><p><Link href="/">All activities</Link></p></main>;
+  }
+  if (!activity) return <main><p className="small" aria-live="polite">Loading…</p></main>;
+
+  const open = activity.state === "in_catalogue" || activity.state === "choosing";
+  const cost = activity.materialsCostPence > 0 ? `about £${(activity.materialsCostPence / 100).toFixed(2)}` : "none";
+
+  return (
+    <main>
+      <p><Link href="/">← All activities</Link></p>
+      <h1>{activity.title}</h1>
+      <p className="lede">{activity.outcome}</p>
+      <p className="counter" aria-live="polite">{counterText(activity)}</p>
+
+      <dl className="facts">
+        <dt>People</dt><dd>{activity.minPeople}–{activity.maxPeople}</dd>
+        <dt>How long</dt><dd>{Math.round(activity.durationMin / 60 * 10) / 10} hours</dd>
+        <dt>Where</dt><dd>{activity.placeKind === "venue" ? "A checked indoor venue" : "A public place outdoors"}</dd>
+        <dt>Bring</dt><dd>{activity.bring || "Nothing"}</dd>
+        <dt>Materials</dt><dd>{cost}</dd>
+        <dt>Someone who knows how</dt><dd>{activity.needsKnower ? "Needed" : "Not needed"}</dd>
+        {activity.season && (<><dt>Season</dt><dd>{activity.season}</dd></>)}
+      </dl>
+
+      {open && (
+        <fieldset className="times">
+          <legend>When suits you? (optional)</legend>
+          {TIMES.map(([value, label]) => (
+            <div className="check" key={value}>
+              <input id={`t-${value}`} type="checkbox" checked={times.includes(value)} onChange={() => toggleTime(value)} disabled={busy} />
+              <label htmlFor={`t-${value}`}>{label}</label>
+            </div>
+          ))}
+        </fieldset>
+      )}
+
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {notice && <p className="notice" role="status">{notice}</p>}
+
+      {open && !activity.mine && (
+        <button onClick={() => save("PUT")} disabled={busy}>Count me in</button>
+      )}
+      {activity.mine && (
+        <button className="secondary" onClick={() => save("DELETE")} disabled={busy}>I’m out</button>
+      )}
+      {!signedIn && open && <p className="small">You’ll be asked to sign in first. It takes one email.</p>}
+      <p className="small">Only the number of people is shown. Nobody sees who else is in.</p>
+    </main>
+  );
+}

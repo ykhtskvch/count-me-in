@@ -69,3 +69,27 @@ test("cross-site form posts are refused", async () => {
   });
   assert.equal(response.status, 403);
 });
+
+test("activity page renders its shell and says only counts are public", async () => {
+  const response = await render("/activity/some-card");
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /Loading/);
+});
+
+test("Count me in without signing in asks to sign in", async () => {
+  const response = await render("/api/activities/some-card/interest", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ times: ["saturday"] }),
+  });
+  assert.equal(response.status, 401);
+});
+
+test("Count me in from another site is refused", async () => {
+  const response = await render("/api/activities/some-card/interest", {
+    method: "PUT",
+    headers: { "content-type": "application/json", origin: "https://evil.example" },
+    body: "{}",
+  });
+  assert.equal(response.status, 403);
+});
