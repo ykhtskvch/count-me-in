@@ -53,7 +53,18 @@ After changing `db/schema.ts`, run `npm run db:generate` to write a new migratio
 | `db/outbox.ts`, `drizzle/0002_outbox.sql` | Emails are queued in the same transaction as the change they report | 7 |
 | `lib/emails.ts`, `db/mailer.ts`, `db/ses.ts` | Email texts; sending through Amazon SES with the address looked up in Supabase at send time; stale emails are dropped, failures retried 5 times | 7 |
 | `lib/scheduler.ts`, `app/api/internal/tick/`, `ops/supabase/scheduler.sql` | Signed Supabase Cron call every 5 minutes: closes rounds, passes on unanswered host offers, cancels unready gatherings, marks happened ones, queues reminders, sends email | 0.4 |
+| `lib/place-input.ts`, `db/places.ts`, `app/moderate/` | Moderator screen: the list of places with standing windows, and live gatherings with a cancel button (reason kept in the log) | 5.1, 8.4 |
 | `app/page.tsx`, `app/activity/[id]/` | Catalogue and the activity page with Count me in / I'm out | 2.1–2.3, 3.1–3.3 |
+
+## Making someone a moderator
+
+Sign in once and finish `/welcome`. Then find your user ID under Supabase → Authentication → Users and run this in the D1 console:
+
+```sql
+UPDATE person SET role = 'moderator' WHERE auth_user_id = '<your Supabase user ID>';
+```
+
+The moderator screen is at `/moderate`.
 
 ## Turning on the clock and email
 

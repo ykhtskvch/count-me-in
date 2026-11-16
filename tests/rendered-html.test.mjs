@@ -119,3 +119,10 @@ test("the scheduler endpoint refuses unsigned calls and GET", async () => {
   assert.equal((await render("/api/internal/tick", { method: "POST" })).status, 401);
   assert.equal((await render("/api/internal/tick")).status, 405);
 });
+
+test("moderator screens need a moderator", async () => {
+  assert.equal((await render("/api/mod/places")).status, 401);
+  assert.equal((await render("/api/mod/gatherings")).status, 401);
+  const response = await render("/moderate");
+  assert.equal(response.status, 200);
+});
