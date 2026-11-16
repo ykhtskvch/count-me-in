@@ -46,6 +46,15 @@ async function loadFacts(db: D1Database, row: Row, payload: Payload, siteUrl: st
   }
 
   if (row.template.startsWith("venue_")) return venueFacts(db, row, payload, siteUrl);
+  if (row.template === "card_published" || row.template === "card_rejected") {
+    const card = await db
+      .prepare("SELECT id, title, state, rejection_reason AS reason FROM activity WHERE id = ?1")
+      .bind(payload.activityId ?? "")
+      .first<{ id: string; title: string; state: string; reason: string | null }>();
+    if (!card) return null;
+    if (row.template === "card_published" && card.state === "removed") return null;
+    return { siteUrl, title: card.title, activityId: card.id, note: card.reason ?? undefined };
+  }
 
   const g = await getGathering(db, payload.gatheringId ?? "", row.personId);
   if (!g) return null;

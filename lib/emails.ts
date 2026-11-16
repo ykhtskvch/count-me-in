@@ -23,6 +23,8 @@ export type EmailFacts = {
   reason?: "no_host" | "no_place" | "moderator";
   outcome?: string;
   maxPeople?: number;
+  /** The rejection reason shown to a card's author. */
+  note?: string;
 };
 
 export type RenderedEmail = { subject: string; text: string; html: string };
@@ -143,6 +145,25 @@ function draft(template: Template, f: EmailFacts): Draft {
           "Thank you for saying yes. We hope to ask again.",
         ],
       };
+    case "card_published":
+      return {
+        subject: `${f.title} is in the catalogue`,
+        lines: [
+          `Thank you for suggesting ${f.title}. It’s now in the catalogue, and neighbours can say Count me in.`,
+          "You don’t need to organise anything. When enough people are in, we’ll suggest evenings.",
+        ],
+        action: { label: "See your activity", url: activityUrl },
+      };
+    case "card_rejected":
+      return {
+        subject: `${f.title} wasn’t published`,
+        lines: [
+          `Thank you for suggesting ${f.title}. We couldn’t publish it this time.`,
+          f.note ? `Why: ${f.note}` : "",
+          "You’re welcome to suggest another activity.",
+        ],
+        action: { label: "Suggest an activity", url: `${f.siteUrl}/suggest` },
+      };
     case "reminder":
       return {
         subject: `Tomorrow: ${f.title}`,
@@ -155,13 +176,17 @@ function draft(template: Template, f: EmailFacts): Draft {
 export function renderEmail(template: Template, facts: EmailFacts): RenderedEmail {
   const d = draft(template, facts);
   const lines = d.lines.filter(Boolean);
-  const text = [...lines, "", d.action ? `${d.action.label}: ${d.action.url}` : "", "", FOOTER].join("\n").trim();
+  // NTF-03: every email to a participant links to their settings. Venues have no account.
+  const footer = template.startsWith("venue_") ? FOOTER : `${FOOTER} Email settings and your account: ${facts.siteUrl}/settings`;
+  const text = [...lines, "", d.action ? `${d.action.label}: ${d.action.url}` : "", "", footer].join("\n").trim();
   const html = `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1d2420;max-width:560px">${lines
     .map((l) => `<p>${escapeHtml(l)}</p>`)
     .join("")}${
     d.action
       ? `<p><a href="${escapeHtml(d.action.url)}" style="display:inline-block;background:#1d2420;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px">${escapeHtml(d.action.label)}</a></p>`
       : ""
-  }<p style="color:#66706a;font-size:12px">${escapeHtml(FOOTER)}</p></div>`;
+  }<p style="color:#66706a;font-size:12px">${escapeHtml(FOOTER)}${
+    template.startsWith("venue_") ? "" : ` <a href="${escapeHtml(`${facts.siteUrl}/settings`)}">Email settings and your account</a>`
+  }</p></div>`;
   return { subject: d.subject, text, html };
 }

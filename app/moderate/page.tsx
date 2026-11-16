@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { slotLabel } from "@/lib/slots";
+import { ModeratorExtras } from "./extras";
 
 type Window = { weekday: number; startTime: string; endTime: string; autoApprove: boolean };
 type Place = {
@@ -167,6 +168,7 @@ export default function ModeratePage() {
   return (
     <main>
       <h1>Moderate</h1>
+      <ModeratorExtras />
       {message && <p className="notice" role="status">{message}</p>}
 
       <h2>Gatherings</h2>

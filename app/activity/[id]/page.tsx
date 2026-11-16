@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { dayText, slotCounter, slotLabel } from "@/lib/slots";
 import { counterText } from "../../components/catalogue";
+import { ReportButton } from "../../components/report-button";
 
 type Detail = {
   id: string;
@@ -37,14 +38,14 @@ type Round = {
   slots: { id: string; startsAt: string; endsAt: string; canMake: number; mine: boolean }[];
 };
 
-type Loaded = { activity: Detail; round: Round | null; gatheringId: string | null; signedIn: boolean } | { error: string };
+type Loaded = { activity: Detail; round: Round | null; gatheringId: string | null; isModerator: boolean; signedIn: boolean } | { error: string };
 
 async function fetchActivity(id: string): Promise<Loaded> {
   try {
     const response = await fetch(`/api/activities/${encodeURIComponent(id)}`);
-    const data = (await response.json()) as { activity?: Detail; round?: Round | null; gatheringId?: string | null; signedIn?: boolean; error?: string };
+    const data = (await response.json()) as { activity?: Detail; round?: Round | null; gatheringId?: string | null; isModerator?: boolean; signedIn?: boolean; error?: string };
     if (!response.ok || !data.activity) return { error: data.error ?? "This activity isn’t available." };
-    return { activity: data.activity, round: data.round ?? null, gatheringId: data.gatheringId ?? null, signedIn: Boolean(data.signedIn) };
+    return { activity: data.activity, round: data.round ?? null, gatheringId: data.gatheringId ?? null, isModerator: Boolean(data.isModerator), signedIn: Boolean(data.signedIn) };
   } catch {
     return { error: "We couldn’t load this activity. Please refresh." };
   }
@@ -55,6 +56,7 @@ export default function ActivityPage() {
   const [activity, setActivity] = useState<Detail | null>(null);
   const [round, setRound] = useState<Round | null>(null);
   const [gatheringId, setGatheringId] = useState<string | null>(null);
+  const [isModerator, setIsModerator] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [times, setTimes] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -69,6 +71,7 @@ export default function ActivityPage() {
     setActivity(result.activity);
     setRound(result.round);
     setGatheringId(result.gatheringId);
+    setIsModerator(result.isModerator);
     setTimes(result.activity.myTimes);
     setSignedIn(result.signedIn);
   }, []);
@@ -105,7 +108,7 @@ export default function ActivityPage() {
 
   type Reply = { error?: string; needsWelcome?: boolean; roundOpened?: boolean; gathering?: string | null };
 
-  async function send(url: string, method: "PUT" | "DELETE", body: unknown, done: (data: Reply) => string) {
+  async function send(url: string, method: "PUT" | "DELETE" | "POST", body: unknown, done: (data: Reply) => string) {
     setBusy(true);
     setError("");
     try {
@@ -209,6 +212,18 @@ export default function ActivityPage() {
       )}
       {!signedIn && open && <p className="small">You’ll be asked to sign in first. It takes one email.</p>}
       <p className="small">Only the number of people is shown. Nobody sees who else is in.</p>
+      {isModerator && (
+        <p className="small">
+          <button
+            className="link"
+            disabled={busy}
+            onClick={() => send(`/api/mod/activities/${encodeURIComponent(id)}/hide`, "POST", { note: "" }, () => "Hidden from the catalogue. Any gathering was cancelled.")}
+          >
+            Hide this activity (moderator)
+          </button>
+        </p>
+      )}
+      {signedIn && !isModerator && <ReportButton url={`/api/activities/${encodeURIComponent(id)}/report`} label="Report this activity" signInNext={`/activity/${id}`} />}
     </main>
   );
 }

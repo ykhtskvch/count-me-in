@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { slotLabel } from "@/lib/slots";
+import { ReportButton } from "../../components/report-button";
 
 type Gathering = {
   id: string;
@@ -150,6 +151,9 @@ export default function GatheringPage() {
         <button className="secondary" onClick={() => attend("DELETE")} disabled={busy}>I can’t make it</button>
       )}
       <p className="small">Only the number of people going is shown. You can stop going at any time.</p>
+      {gathering.hostName && !gathering.me?.isHost && (
+        <ReportButton url={`/api/gatherings/${encodeURIComponent(id)}/report`} label="Report a problem with the host" signInNext={`/gathering/${id}`} />
+      )}
     </main>
   );
 }

@@ -107,3 +107,11 @@ export async function requireModerator(request: Request): Promise<{ person: Pers
   if (session.person.role !== "moderator") return { error: json({ error: "Only moderators can do this." }, 403) };
   return { person: session.person };
 }
+
+/** Routes for people with a finished account: 401 when signed out, 403 until /welcome is done. */
+export async function requirePerson(request: Request): Promise<{ person: Person; authUserId: string } | { error: Response }> {
+  const session = await getSession(request);
+  if (!session) return { error: json({ error: "Please sign in first." }, 401) };
+  if (!session.person) return { error: json({ error: "Finish setting up your account first.", needsWelcome: true }, 403) };
+  return { person: session.person, authUserId: session.authUserId };
+}
