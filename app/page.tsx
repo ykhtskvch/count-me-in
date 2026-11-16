@@ -12,7 +12,7 @@ export default function Home() {
         <li>When enough neighbours are in, we suggest a few evenings.</li>
         <li>The first evening to fill up happens, at a checked public place.</li>
       </ol>
-      <p>Coming soon.</p>
+      <p><a href="/signin">Sign in</a> to say Count me in.</p>
     </main>
   );
 }

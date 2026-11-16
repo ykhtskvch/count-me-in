@@ -236,3 +236,37 @@ export const setting = sqliteTable("setting", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 });
+
+// Sign-in (ACC-01). Same two-step magic link as the Street Noticeboard.
+// email_hash is a one-way hash kept only for the 30-minute verification window.
+export const pendingAuthRequest = sqliteTable(
+  "pending_auth_request",
+  {
+    id: text("id").primaryKey(),
+    browserTokenHash: text("browser_token_hash").notNull().unique(),
+    emailHash: text("email_hash").notNull(),
+    continuationPath: text("continuation_path"),
+    expiresAt: text("expires_at").notNull(),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("pending_auth_expires").on(t.expiresAt)],
+);
+
+export const authRateLimit = sqliteTable("auth_rate_limit", {
+  bucketKey: text("bucket_key").primaryKey(),
+  attempts: integer("attempts").notNull().default(1),
+  expiresAt: text("expires_at").notNull(),
+});
+
+// A session belongs to the Supabase account, so it exists before the person record:
+// someone who has verified their email but not yet finished /welcome has a session and no person.
+export const session = sqliteTable(
+  "session",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    authUserId: text("auth_user_id").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("session_auth_user").on(t.authUserId)],
+);
