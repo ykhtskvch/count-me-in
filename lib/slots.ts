@@ -151,6 +151,11 @@ export function dayText(at: string): string {
   return dayLabel.format(new Date(at)).replace(",", "");
 }
 
+/** "Thu 19 Nov, 14:00", in London time. */
+export function dateTimeText(at: string): string {
+  return `${dayText(at)}, ${timeLabel.format(new Date(at))}`;
+}
+
 /** "3 can make it · 1 more needed" for one offered evening. */
 export function slotCounter(canMake: number, minPeople: number): string {
   const more = Math.max(0, minPeople - canMake);

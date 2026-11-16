@@ -9,3 +9,5 @@ MODERATOR_EMAIL=moderator@example.com
 PUBLIC_SITE_URL=http://localhost:5173
 # Server-only key that the Supabase Cron call signs with (64 lowercase hex characters).
 # SCHEDULER_SECRET=
+# Emails are only sent when this is "true"; until then they wait in email_outbox.
+EMAIL_SENDING_ENABLED=false

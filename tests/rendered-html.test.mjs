@@ -114,3 +114,8 @@ test("joining a gathering without signing in asks to sign in", async () => {
   const response = await render("/api/gatherings/some-gathering/attendance", { method: "PUT" });
   assert.equal(response.status, 401);
 });
+
+test("the scheduler endpoint refuses unsigned calls and GET", async () => {
+  assert.equal((await render("/api/internal/tick", { method: "POST" })).status, 401);
+  assert.equal((await render("/api/internal/tick")).status, 405);
+});

@@ -9,6 +9,7 @@ export const TEMPLATES = [
   "gathering_scheduled", // GAT-01: date, place, host, what to bring
   "below_minimum", // GAT-05: fewer than the minimum now; you decide whether to go
   "gathering_cancelled", // no host, or a moderator cancelled
+  "reminder", // NTF-01: the day before
 ] as const;
 
 export type Template = (typeof TEMPLATES)[number];
