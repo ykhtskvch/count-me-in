@@ -7,7 +7,7 @@
 // is left, the gathering is cancelled and the card goes back to the catalogue.
 import { type CardEvent, type CardState, canTransition, nextState } from "../lib/card-state.ts";
 import { DEFAULT_SETTINGS } from "../lib/settings.ts";
-import { GOING_SQL, queueToPeople } from "./outbox.ts";
+import { GOING_SQL, queueToPeople, queueToPlace } from "./outbox.ts";
 import { createToken, hashSecret } from "./runtime.ts";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -335,15 +335,21 @@ export async function leaveGathering(
 export async function cancelGathering(
   db: D1Database,
   gatheringId: string,
-  reason: "no_host" | "moderator",
+  reason: "no_host" | "no_place" | "moderator",
   actorId: string | null = null,
   note: string | null = null,
 ): Promise<boolean> {
   const g = await core(db, gatheringId);
   if (!g || !["awaiting_place", "scheduled"].includes(g.status)) return false;
   // A removed card has nowhere to go; the gathering is still cancelled.
-  const cardTo = canTransition(g.cardState, "gathering_cancelled") ? nextState(g.cardState, "gathering_cancelled") : g.cardState;
+  const cancel = db.prepare(`UPDATE gathering SET status = 'cancelled' WHERE id = ?1 AND status IN ${LIVE}`).bind(gatheringId);
+  const event: CardEvent = reason === "no_place" ? "no_places_left" : "gathering_cancelled";
+  const cardTo = canTransition(g.cardState, event) ? nextState(g.cardState, event) : g.cardState;
   const statements = [
+    // A venue that had said yes is told the room is no longer needed.
+    ...(g.placeId && g.placeKind === "venue"
+      ? [queueToPlace(db, "venue_cancelled", { gatheringId }, g.placeId, `EXISTS (SELECT 1 FROM gathering WHERE id = ?1 AND status IN ${LIVE})`, [gatheringId])]
+      : []),
     queueToPeople(
       db,
       "gathering_cancelled",
@@ -351,9 +357,12 @@ export async function cancelGathering(
       `${GOING_SQL(1)} AND EXISTS (SELECT 1 FROM gathering WHERE id = ?1 AND status IN ${LIVE})`,
       [gatheringId],
     ),
-    db.prepare(`UPDATE gathering SET status = 'cancelled' WHERE id = ?1 AND status IN ${LIVE}`).bind(gatheringId),
+    cancel,
     db
       .prepare("UPDATE host_offer SET response = 'expired' WHERE gathering_id = ?1 AND response IS NULL")
+      .bind(gatheringId),
+    db
+      .prepare("UPDATE venue_request SET response = 'expired' WHERE gathering_id = ?1 AND response IS NULL")
       .bind(gatheringId),
     db
       .prepare("UPDATE activity SET state = ?2 WHERE id = ?1 AND state = ?3")
@@ -367,8 +376,8 @@ export async function cancelGathering(
         .bind(crypto.randomUUID(), actorId, gatheringId, note),
     );
   }
-  const [, cancelled] = await db.batch(statements);
-  return cancelled.meta.changes > 0;
+  const results = await db.batch(statements);
+  return results[statements.indexOf(cancel)].meta.changes > 0;
 }
 
 /** Scheduler: hosting offers nobody answered in time pass to the next person (GAT-02). */
@@ -393,11 +402,11 @@ export async function expireHostOffers(db: D1Database, now = new Date()): Promis
  */
 export async function cancelUnreadyGatherings(db: D1Database, now = new Date()): Promise<number> {
   const { results } = await db
-    .prepare(`SELECT g.id FROM gathering g JOIN slot s ON s.id = g.slot_id
+    .prepare(`SELECT g.id, g.host_person_id IS NULL AS noHost FROM gathering g JOIN slot s ON s.id = g.slot_id
       WHERE g.status = 'awaiting_place' AND s.starts_at <= ?1`)
     .bind(now.toISOString())
-    .all<{ id: string }>();
-  for (const g of results) await cancelGathering(db, g.id, "no_host");
+    .all<{ id: string; noHost: number }>();
+  for (const g of results) await cancelGathering(db, g.id, g.noHost ? "no_host" : "no_place");
   return results.length;
 }
 

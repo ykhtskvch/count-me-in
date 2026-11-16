@@ -126,3 +126,9 @@ test("moderator screens need a moderator", async () => {
   const response = await render("/moderate");
   assert.equal(response.status, 200);
 });
+
+test("venue request page and API refuse a malformed link without touching anything", async () => {
+  assert.equal((await render("/venue?token=abc")).status, 200);
+  assert.equal((await render("/api/venue-request?token=abc")).status, 404);
+  assert.equal((await post("/api/venue-request", { token: "abc", approve: true })).status, 400);
+});

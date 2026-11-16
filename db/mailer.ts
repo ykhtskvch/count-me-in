@@ -20,8 +20,17 @@ export type MailerDeps = {
   send(message: OutgoingEmail): Promise<string | null>;
 };
 
-type Row = { id: string; template: Template; payload: string; personId: string; authUserId: string; attempts: number };
-type Payload = { activityId?: string; roundId?: string; gatheringId?: string; token?: string; deadlineAt?: string; reason?: "no_host" | "moderator" };
+type Row = {
+  id: string;
+  template: Template;
+  payload: string;
+  personId: string | null;
+  authUserId: string | null;
+  /** For emails to a venue: its booking address, which the moderator entered (not a participant's). */
+  placeEmail: string | null;
+  attempts: number;
+};
+type Payload = { activityId?: string; roundId?: string; gatheringId?: string; token?: string; deadlineAt?: string; reason?: "no_host" | "no_place" | "moderator" };
 
 /** The facts an email needs, or null when it is no longer relevant and should be dropped. */
 async function loadFacts(db: D1Database, row: Row, payload: Payload, siteUrl: string): Promise<EmailFacts | null> {
@@ -35,6 +44,8 @@ async function loadFacts(db: D1Database, row: Row, payload: Payload, siteUrl: st
     if (row.template === "round_opened" && round.outcome !== "open") return null;
     return { siteUrl, title: round.title, activityId: round.activityId, closesAt: round.closesAt };
   }
+
+  if (row.template.startsWith("venue_")) return venueFacts(db, row, payload, siteUrl);
 
   const g = await getGathering(db, payload.gatheringId ?? "", row.personId);
   if (!g) return null;
@@ -75,9 +86,11 @@ export async function sendDueEmails(
   limit = 25,
 ): Promise<{ sent: number; dropped: number; failed: number }> {
   const { results } = await db
-    .prepare(`SELECT o.id, o.template, o.payload, o.person_id AS personId, p.auth_user_id AS authUserId, o.attempts
-      FROM email_outbox o JOIN person p ON p.id = o.person_id
-      WHERE o.sent_at IS NULL AND o.attempts < ?1 AND p.blocked_at IS NULL
+    .prepare(`SELECT o.id, o.template, o.payload, o.person_id AS personId, p.auth_user_id AS authUserId,
+        pl.booking_email AS placeEmail, o.attempts
+      FROM email_outbox o LEFT JOIN person p ON p.id = o.person_id LEFT JOIN place pl ON pl.id = o.place_id
+      WHERE o.sent_at IS NULL AND o.attempts < ?1
+        AND ((p.id IS NOT NULL AND p.blocked_at IS NULL) OR pl.id IS NOT NULL)
       ORDER BY o.created_at LIMIT ?2`)
     .bind(MAX_ATTEMPTS, limit)
     .all<Row>();
@@ -102,7 +115,7 @@ export async function sendDueEmails(
         tally.dropped++;
         continue;
       }
-      const to = await deps.lookupEmail(row.authUserId);
+      const to = row.placeEmail ?? (row.authUserId ? await deps.lookupEmail(row.authUserId) : null);
       if (!to) {
         await finish(row.id, "dropped: no address");
         tally.dropped++;
@@ -120,6 +133,39 @@ export async function sendDueEmails(
     }
   }
   return tally;
+}
+
+async function venueFacts(db: D1Database, row: Row, payload: Payload, siteUrl: string): Promise<EmailFacts | null> {
+  const g = await db
+    .prepare(`SELECT g.status, g.place_id AS placeId, a.id AS activityId, a.title, a.outcome, a.max_people AS maxPeople,
+        s.starts_at AS startsAt, s.ends_at AS endsAt,
+        (SELECT count(*) FROM attendance at WHERE at.gathering_id = g.id AND at.status = 'going') AS going
+      FROM gathering g JOIN slot s ON s.id = g.slot_id JOIN round r ON r.id = g.round_id
+      JOIN activity a ON a.id = r.activity_id WHERE g.id = ?1`)
+    .bind(payload.gatheringId ?? "")
+    .first<{ status: string; placeId: string | null; activityId: string; title: string; outcome: string; maxPeople: number; startsAt: string; endsAt: string; going: number }>();
+  if (!g) return null;
+  if (row.template === "venue_request") {
+    const pending = await db
+      .prepare("SELECT 1 AS ok FROM venue_request WHERE token_hash = ?1 AND response IS NULL")
+      .bind(await hashSecret(payload.token ?? ""))
+      .first();
+    if (!pending || g.status !== "awaiting_place") return null;
+  }
+  if (row.template === "venue_auto_booked" && !["awaiting_place", "scheduled"].includes(g.status)) return null;
+  return {
+    siteUrl,
+    title: g.title,
+    outcome: g.outcome,
+    activityId: g.activityId,
+    gatheringId: payload.gatheringId,
+    startsAt: g.startsAt,
+    endsAt: g.endsAt,
+    going: g.going,
+    maxPeople: g.maxPeople,
+    token: payload.token,
+    deadlineAt: payload.deadlineAt,
+  };
 }
 
 /** NTF-01: queues one reminder per person going, the day before a booked gathering. */

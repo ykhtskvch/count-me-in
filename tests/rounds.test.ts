@@ -16,6 +16,11 @@ async function setup(opts: { min?: number; max?: number; placeKind?: "venue" | "
       .bind(`p${n}`, `Person ${n}`)
       .run();
   }
+  // One indoor venue on the list, so a won indoor card has somewhere to ask.
+  await db
+    .prepare(`INSERT INTO place (id, name, address, postcode_district, kind, step_free, booking_email)
+      VALUES ('hall', 'Hall', '1 High St', 'SE15', 'venue', 1, 'hall@venue.example')`)
+    .run();
   await db
     .prepare(`INSERT INTO activity (id, title, outcome, min_people, max_people, duration_min, place_kind, state)
       VALUES ('a1', 'Mend a jumper', 'Each leaves with a mended jumper', ?1, ?2, 120, ?3, 'in_catalogue')`)

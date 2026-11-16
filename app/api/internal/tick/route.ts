@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/db/auth";
 import { cancelUnreadyGatherings, completeGatherings, expireHostOffers } from "@/db/gatherings";
 import { queueReminders, sendDueEmails } from "@/db/mailer";
 import { closeDueRounds } from "@/db/rounds";
+import { expireVenueRequests } from "@/db/venues";
 import { getDatabase } from "@/db/runtime";
 import { type SesBindings, sendSesEmail } from "@/db/ses";
 import { verifyTick } from "@/lib/scheduler";
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     const summary = {
       roundsClosed: (await closeDueRounds(db, now)).length,
       hostOffersExpired: await expireHostOffers(db, now),
+      venueRequestsExpired: await expireVenueRequests(db, now),
       gatheringsCancelled: await cancelUnreadyGatherings(db, now),
       gatheringsHappened: await completeGatherings(db, now),
       remindersQueued: await queueReminders(db, now),
