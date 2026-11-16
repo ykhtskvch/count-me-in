@@ -1,5 +1,6 @@
 // INT-01, INT-02: "Count me in" with rough times, and taking it back.
 import { removeInterest, setInterest } from "@/db/activities";
+import { openRoundIfReady, removeOpenVotes } from "@/db/rounds";
 import { getDatabase, getSession, json, readJson, rejectCrossOrigin } from "@/db/runtime";
 import { normalizeTimes } from "@/lib/catalogue";
 
@@ -18,9 +19,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const times = normalizeTimes(payload?.times);
   const who = await signedInPerson(request);
   if (who.error) return who.error;
-  const ok = await setInterest(await getDatabase(), id, who.person.id, times);
+  const db = await getDatabase();
+  const ok = await setInterest(db, id, who.person.id, times);
   if (!ok) return json({ error: "This activity isn’t taking new interest right now." }, 409);
-  return json({ counted: true, times });
+  // TIME-01: the interest that reaches the minimum opens the picking of evenings.
+  const roundOpened = Boolean(await openRoundIfReady(db, id));
+  return json({ counted: true, times, roundOpened });
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +33,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const { id } = await params;
   const who = await signedInPerson(request);
   if (who.error) return who.error;
-  await removeInterest(await getDatabase(), id, who.person.id);
+  const db = await getDatabase();
+  await removeOpenVotes(db, id, who.person.id);
+  await removeInterest(db, id, who.person.id);
   return json({ counted: false });
 }

@@ -93,3 +93,8 @@ test("Count me in from another site is refused", async () => {
   });
   assert.equal(response.status, 403);
 });
+
+test("picking an evening without signing in asks to sign in", async () => {
+  const response = await render("/api/slots/some-slot/vote", { method: "PUT" });
+  assert.equal(response.status, 401);
+});

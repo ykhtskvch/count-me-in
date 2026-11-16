@@ -1,6 +1,6 @@
 // Catalogue and interest queries. Other people's names never leave this file:
 // the API returns counts only (INT-03).
-import { type CatalogueItem, sortCatalogue, stillNeeded } from "@/lib/catalogue";
+import { type CatalogueItem, sortCatalogue, stillNeeded } from "../lib/catalogue.ts";
 
 export const PUBLIC_STATES = ["in_catalogue", "choosing", "awaiting_place", "scheduled"] as const;
 

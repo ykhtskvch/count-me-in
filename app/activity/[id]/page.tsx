@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { dayText, slotCounter, slotLabel } from "@/lib/slots";
 import { counterText } from "../../components/catalogue";
 
 type Detail = {
@@ -31,14 +32,19 @@ const TIMES = [
   ["sunday", "Sunday"],
 ] as const;
 
-type Loaded = { activity: Detail; signedIn: boolean } | { error: string };
+type Round = {
+  closesAt: string;
+  slots: { id: string; startsAt: string; endsAt: string; canMake: number; mine: boolean }[];
+};
+
+type Loaded = { activity: Detail; round: Round | null; signedIn: boolean } | { error: string };
 
 async function fetchActivity(id: string): Promise<Loaded> {
   try {
     const response = await fetch(`/api/activities/${encodeURIComponent(id)}`);
-    const data = (await response.json()) as { activity?: Detail; signedIn?: boolean; error?: string };
+    const data = (await response.json()) as { activity?: Detail; round?: Round | null; signedIn?: boolean; error?: string };
     if (!response.ok || !data.activity) return { error: data.error ?? "This activity isn’t available." };
-    return { activity: data.activity, signedIn: Boolean(data.signedIn) };
+    return { activity: data.activity, round: data.round ?? null, signedIn: Boolean(data.signedIn) };
   } catch {
     return { error: "We couldn’t load this activity. Please refresh." };
   }
@@ -47,6 +53,7 @@ async function fetchActivity(id: string): Promise<Loaded> {
 export default function ActivityPage() {
   const { id } = useParams<{ id: string }>();
   const [activity, setActivity] = useState<Detail | null>(null);
+  const [round, setRound] = useState<Round | null>(null);
   const [signedIn, setSignedIn] = useState(false);
   const [times, setTimes] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -59,6 +66,7 @@ export default function ActivityPage() {
       return;
     }
     setActivity(result.activity);
+    setRound(result.round);
     setTimes(result.activity.myTimes);
     setSignedIn(result.signedIn);
   }, []);
@@ -73,16 +81,38 @@ export default function ActivityPage() {
     };
   }, [id, apply]);
 
-  async function save(method: "PUT" | "DELETE", nextTimes = times) {
+  function save(method: "PUT" | "DELETE", nextTimes = times) {
+    return send(`/api/activities/${encodeURIComponent(id)}/interest`, method, method === "PUT" ? { times: nextTimes } : undefined, (data) =>
+      data.roundOpened
+        ? "You’re in, and that makes enough people. Pick the evenings you can make below."
+        : method === "PUT"
+          ? "You’re in. We’ll email you when enough people join."
+          : "Done. You’re no longer counted.",
+    );
+  }
+
+  function vote(slotId: string, canMake: boolean) {
+    return send(`/api/slots/${encodeURIComponent(slotId)}/vote`, canMake ? "PUT" : "DELETE", undefined, (data) =>
+      data.gathering
+        ? "That evening has enough people now. It’s happening, and we’ll email everyone the details."
+        : canMake
+          ? "Noted. Tick every evening you can make."
+          : "Done. That evening is unticked.",
+    );
+  }
+
+  type Reply = { error?: string; needsWelcome?: boolean; roundOpened?: boolean; gathering?: string | null };
+
+  async function send(url: string, method: "PUT" | "DELETE", body: unknown, done: (data: Reply) => string) {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/activities/${encodeURIComponent(id)}/interest`, {
+      const response = await fetch(url, {
         method,
         headers: { "content-type": "application/json" },
-        body: method === "PUT" ? JSON.stringify({ times: nextTimes }) : undefined,
+        body: body === undefined ? undefined : JSON.stringify(body),
       });
-      const data = (await response.json()) as { error?: string; needsWelcome?: boolean };
+      const data = (await response.json()) as Reply;
       if (response.status === 401) {
         window.location.assign(`/signin?next=${encodeURIComponent(`/activity/${id}`)}`);
         return;
@@ -95,7 +125,7 @@ export default function ActivityPage() {
         setError(data.error ?? "That didn’t work. Please try again.");
         return;
       }
-      setNotice(method === "PUT" ? "You’re in. We’ll email you when enough people join." : "Done. You’re no longer counted.");
+      setNotice(done(data));
       apply(await fetchActivity(id));
     } catch {
       setError("The service is unavailable. Please try again.");
@@ -142,6 +172,21 @@ export default function ActivityPage() {
             <div className="check" key={value}>
               <input id={`t-${value}`} type="checkbox" checked={times.includes(value)} onChange={() => toggleTime(value)} disabled={busy} />
               <label htmlFor={`t-${value}`}>{label}</label>
+            </div>
+          ))}
+        </fieldset>
+      )}
+
+      {round && round.slots.length > 0 && (
+        <fieldset className="times">
+          <legend>Pick every evening you can make</legend>
+          <p className="small">The first evening to reach {activity.minPeople} people happens. Picking closes {dayText(round.closesAt)}.</p>
+          {round.slots.map((slot) => (
+            <div className="check" key={slot.id}>
+              <input id={`s-${slot.id}`} type="checkbox" checked={slot.mine} onChange={() => vote(slot.id, !slot.mine)} disabled={busy} />
+              <label htmlFor={`s-${slot.id}`}>
+                {slotLabel(slot.startsAt, slot.endsAt)} <span className="small">· {slotCounter(slot.canMake, activity.minPeople)}</span>
+              </label>
             </div>
           ))}
         </fieldset>
