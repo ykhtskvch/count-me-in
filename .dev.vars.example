@@ -1,0 +1,11 @@
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
+SUPABASE_SECRET_KEY=sb_secret_your_server_only_key
+AWS_ACCESS_KEY_ID=your_restricted_ses_access_key
+AWS_SECRET_ACCESS_KEY=your_restricted_ses_secret
+AWS_REGION=eu-west-2
+SES_FROM_EMAIL=hello@example.org
+MODERATOR_EMAIL=moderator@example.com
+PUBLIC_SITE_URL=http://localhost:5173
+# Server-only key that the Supabase Cron call signs with (64 lowercase hex characters).
+# SCHEDULER_SECRET=
