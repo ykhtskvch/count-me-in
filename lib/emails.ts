@@ -20,7 +20,11 @@ export type EmailFacts = {
   going?: number;
   token?: string;
   deadlineAt?: string;
-  reason?: "no_host" | "moderator";
+  reason?: "no_host" | "no_place" | "moderator";
+  outcome?: string;
+  maxPeople?: number;
+  /** The rejection reason shown to a card's author. */
+  note?: string;
 };
 
 export type RenderedEmail = { subject: string; text: string; html: string };
@@ -102,10 +106,63 @@ function draft(template: Template, f: EmailFacts): Draft {
         lines: [
           f.reason === "no_host"
             ? "We couldn’t find someone to greet everyone, so the gathering won’t go ahead."
-            : "Our moderator had to cancel this gathering.",
+            : f.reason === "no_place"
+              ? "None of the venues on our list could take the group that evening, so the gathering won’t go ahead."
+              : "Our moderator had to cancel this gathering.",
           "The activity is back in the catalogue and can gather again.",
         ],
         action: { label: "See the activity", url: activityUrl },
+      };
+    case "venue_request":
+      return {
+        subject: `Room request: ${f.title}, ${when(f)}`,
+        lines: [
+          "Hello. Count Me In is a non-profit that helps neighbours meet for one-off evenings. A group would like to use your space.",
+          `Activity: ${f.title}. ${f.outcome ?? ""}`.trim(),
+          `When: ${when(f)}`,
+          `People: ${f.going ?? 0} so far, at most ${f.maxPeople ?? f.going ?? 0}`,
+          "One of the group will be the host and arrive first. The platform doesn’t take payments; the group pays you directly on your usual terms.",
+          `Please approve or decline with the button below. No account needed.${f.deadlineAt ? ` If we don’t hear back by ${dateTimeText(f.deadlineAt)}, we’ll ask another venue.` : ""}`,
+        ],
+        action: { label: "Approve or decline", url: `${f.siteUrl}/venue?token=${f.token}` },
+      };
+    case "venue_auto_booked":
+      return {
+        subject: `Booked in your standing slot: ${f.title}, ${when(f)}`,
+        lines: [
+          "As agreed for your standing slot, this booking was approved automatically. This email is just to let you know.",
+          `Activity: ${f.title}`,
+          `When: ${when(f)}`,
+          `People: ${f.going ?? 0} so far, at most ${f.maxPeople ?? f.going ?? 0}`,
+          "If something has changed, reply to this email and our moderator will sort it out.",
+        ],
+      };
+    case "venue_cancelled":
+      return {
+        subject: `No longer needed: ${f.title}, ${when(f)}`,
+        lines: [
+          `The group for ${f.title} on ${when(f)} won’t be meeting after all, so the room is no longer needed.`,
+          "Thank you for saying yes. We hope to ask again.",
+        ],
+      };
+    case "card_published":
+      return {
+        subject: `${f.title} is in the catalogue`,
+        lines: [
+          `Thank you for suggesting ${f.title}. It’s now in the catalogue, and neighbours can say Count me in.`,
+          "You don’t need to organise anything. When enough people are in, we’ll suggest evenings.",
+        ],
+        action: { label: "See your activity", url: activityUrl },
+      };
+    case "card_rejected":
+      return {
+        subject: `${f.title} wasn’t published`,
+        lines: [
+          `Thank you for suggesting ${f.title}. We couldn’t publish it this time.`,
+          f.note ? `Why: ${f.note}` : "",
+          "You’re welcome to suggest another activity.",
+        ],
+        action: { label: "Suggest an activity", url: `${f.siteUrl}/suggest` },
       };
     case "reminder":
       return {
@@ -119,13 +176,17 @@ function draft(template: Template, f: EmailFacts): Draft {
 export function renderEmail(template: Template, facts: EmailFacts): RenderedEmail {
   const d = draft(template, facts);
   const lines = d.lines.filter(Boolean);
-  const text = [...lines, "", d.action ? `${d.action.label}: ${d.action.url}` : "", "", FOOTER].join("\n").trim();
+  // NTF-03: every email to a participant links to their settings. Venues have no account.
+  const footer = template.startsWith("venue_") ? FOOTER : `${FOOTER} Email settings and your account: ${facts.siteUrl}/settings`;
+  const text = [...lines, "", d.action ? `${d.action.label}: ${d.action.url}` : "", "", footer].join("\n").trim();
   const html = `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1d2420;max-width:560px">${lines
     .map((l) => `<p>${escapeHtml(l)}</p>`)
     .join("")}${
     d.action
       ? `<p><a href="${escapeHtml(d.action.url)}" style="display:inline-block;background:#1d2420;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px">${escapeHtml(d.action.label)}</a></p>`
       : ""
-  }<p style="color:#66706a;font-size:12px">${escapeHtml(FOOTER)}</p></div>`;
+  }<p style="color:#66706a;font-size:12px">${escapeHtml(FOOTER)}${
+    template.startsWith("venue_") ? "" : ` <a href="${escapeHtml(`${facts.siteUrl}/settings`)}">Email settings and your account</a>`
+  }</p></div>`;
   return { subject: d.subject, text, html };
 }

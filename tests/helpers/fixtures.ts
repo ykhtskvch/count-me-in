@@ -7,7 +7,11 @@ import { testDatabase } from "./d1.ts";
 export const now = new Date("2026-11-16T10:00:00Z");
 export const hours = (h: number) => new Date(now.getTime() + h * 3600000);
 
-export async function wonGathering(opts: { min?: number; max?: number; people?: number; voters?: number; place?: boolean } = {}) {
+export type Venue = { id: string; name: string; capacity?: number; window?: { weekday: number; start: string; end: string; auto: boolean } };
+
+export async function wonGathering(
+  opts: { min?: number; max?: number; people?: number; voters?: number; place?: boolean; venues?: Venue[] } = {},
+) {
   const db = testDatabase();
   const people = opts.people ?? 6;
   for (let n = 1; n <= people; n++) {
@@ -23,10 +27,24 @@ export async function wonGathering(opts: { min?: number; max?: number; people?: 
         VALUES ('pl1', 'Peckham Rye bandstand', 'Peckham Rye Park', 'SE15', 'public', 1)`)
       .run();
   }
+  for (const v of opts.venues ?? []) {
+    await db
+      .prepare(`INSERT INTO place (id, name, address, postcode_district, kind, step_free, capacity, booking_email)
+        VALUES (?1, ?2, '1 High St', 'SE15', 'venue', 1, ?3, ?4)`)
+      .bind(v.id, v.name, v.capacity ?? null, `${v.id}@venue.example`)
+      .run();
+    if (v.window) {
+      await db
+        .prepare(`INSERT INTO place_window (id, place_id, weekday, start_time, end_time, auto_approve)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6)`)
+        .bind(`w-${v.id}`, v.id, v.window.weekday, v.window.start, v.window.end, v.window.auto ? 1 : 0)
+        .run();
+    }
+  }
   await db
     .prepare(`INSERT INTO activity (id, title, outcome, min_people, max_people, duration_min, place_kind, bring, state)
-      VALUES ('a1', 'Litter pick', 'A cleaner park', ?1, ?2, 90, 'public', 'Gloves', 'in_catalogue')`)
-    .bind(opts.min ?? 3, opts.max ?? 6)
+      VALUES ('a1', 'Litter pick', 'A cleaner park', ?1, ?2, 90, ?3, 'Gloves', 'in_catalogue')`)
+    .bind(opts.min ?? 3, opts.max ?? 6, opts.venues ? "venue" : "public")
     .run();
   const voters = opts.voters ?? opts.min ?? 3;
   for (let n = 1; n <= voters; n++) await setInterest(db, "a1", `p${n}`, []);

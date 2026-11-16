@@ -53,6 +53,11 @@ After changing `db/schema.ts`, run `npm run db:generate` to write a new migratio
 | `db/outbox.ts`, `drizzle/0002_outbox.sql` | Emails are queued in the same transaction as the change they report | 7 |
 | `lib/emails.ts`, `db/mailer.ts`, `db/ses.ts` | Email texts; sending through Amazon SES with the address looked up in Supabase at send time; stale emails are dropped, failures retried 5 times | 7 |
 | `lib/scheduler.ts`, `app/api/internal/tick/`, `ops/supabase/scheduler.sql` | Signed Supabase Cron call every 5 minutes: closes rounds, passes on unanswered host offers, cancels unready gatherings, marks happened ones, queues reminders, sends email | 0.4 |
+| `db/venues.ts`, `app/venue/` | Indoor venues: room request by email in the platform's name, answered by button without an account; decline or 48 hours of silence moves to the next venue; none left cancels and tells the group; a standing window that approves itself books at once and notifies the venue | 5.2–5.4 |
+| `lib/card-input.ts`, `db/cards.ts`, `app/suggest/` | Anyone suggests an activity; the moderator publishes (with corrections) or rejects with a set reason, and the author is emailed; a moderator's own card goes straight in (the starter set); hiding a card cancels its gathering | CAT-03, CAT-05, MOD-01, MOD-02, MOD-04 |
+| `db/reports.ts`, `app/components/report-button.tsx` | One-button reports on an activity or a gathering's host, seen only by moderators; dismiss, hide or block, which signs the person out and takes them off gatherings | MOD-03, MOD-04 |
+| `db/account.ts`, `app/settings/` | Settings linked from every email; whether others going may see your name; deleting the account and its sign-in | NTF-03, INT-03, ACC-04 |
+| `db/metrics.ts` | The PRD's seven metrics on `/moderate`, counted from stored data only | 10 |
 | `lib/place-input.ts`, `db/places.ts`, `app/moderate/` | Moderator screen: the list of places with standing windows, and live gatherings with a cancel button (reason kept in the log) | 5.1, 8.4 |
 | `app/page.tsx`, `app/activity/[id]/` | Catalogue and the activity page with Count me in / I'm out | 2.1–2.3, 3.1–3.3 |
 

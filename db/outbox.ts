@@ -10,6 +10,11 @@ export const TEMPLATES = [
   "below_minimum", // GAT-05: fewer than the minimum now; you decide whether to go
   "gathering_cancelled", // no host, or a moderator cancelled
   "reminder", // NTF-01: the day before
+  "venue_request", // PLC-03: to a venue, approve or decline by link, no account
+  "venue_auto_booked", // PLC-05: to a venue, a standing window was used
+  "venue_cancelled", // to a venue that had approved, the gathering is off
+  "card_published", // CAT-03: your suggested card is in the catalogue
+  "card_rejected", // MOD-01: your suggested card was not published, and why
 ] as const;
 
 export type Template = (typeof TEMPLATES)[number];
@@ -40,3 +45,20 @@ export const GOING_SQL = (param: number) =>
 
 /** Everyone interested in a card. */
 export const INTERESTED_SQL = (param: number) => `SELECT person_id FROM interest WHERE activity_id = ?${param}`;
+
+/** Queues one email to a place's booking address, if `conditionSql` (using ?1..?N) holds. */
+export function queueToPlace(
+  db: D1Database,
+  template: Template,
+  payload: Record<string, unknown>,
+  placeId: string,
+  conditionSql = "1",
+  params: Value[] = [],
+): D1PreparedStatement {
+  const n = params.length;
+  return db
+    .prepare(`INSERT INTO email_outbox (id, place_id, template, payload)
+      SELECT lower(hex(randomblob(16))), pl.id, '${template}', ?${n + 2}
+      FROM place pl WHERE pl.id = ?${n + 1} AND pl.booking_email IS NOT NULL AND (${conditionSql})`)
+    .bind(...params, placeId, JSON.stringify(payload));
+}

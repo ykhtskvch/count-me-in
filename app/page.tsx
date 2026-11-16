@@ -18,6 +18,7 @@ export default function Home() {
       <h2>Activities</h2>
       <Catalogue />
       <p className="small"><Link href="/signin">Sign in</Link> to say Count me in. Activities near you are shown first.</p>
+      <p className="small"><Link href="/suggest">Suggest an activity</Link> · <Link href="/settings">Settings</Link> · <Link href="/rules">Rules</Link></p>
     </main>
   );
 }

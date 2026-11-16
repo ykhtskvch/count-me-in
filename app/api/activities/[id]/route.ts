@@ -14,5 +14,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!activity) return json({ error: "This activity isn’t available." }, 404);
   const round = activity.state === "choosing" ? await getOpenRound(db, id, session?.person?.id ?? null) : null;
   const gatheringId = ["awaiting_place", "scheduled", "choosing"].includes(activity.state) ? await activeGatheringId(db, id) : null;
-  return json({ activity, round, gatheringId, signedIn: Boolean(session), needsWelcome: Boolean(session && !session.person) });
+  return json({ activity, round, gatheringId, isModerator: session?.person?.role === "moderator", signedIn: Boolean(session), needsWelcome: Boolean(session && !session.person) });
 }

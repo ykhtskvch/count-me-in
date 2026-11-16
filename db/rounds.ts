@@ -11,6 +11,7 @@ import { nextState } from "../lib/card-state.ts";
 import { DEFAULT_SETTINGS } from "../lib/settings.ts";
 import { type Window, proposeSlots, roundClosesAt } from "../lib/slots.ts";
 import { offerHostToNext } from "./gatherings.ts";
+import { requestNextVenue } from "./venues.ts";
 import { INTERESTED_SQL, queueToPeople } from "./outbox.ts";
 
 const ACTIVE_PERSON = "JOIN person p ON p.id = v.person_id AND p.blocked_at IS NULL";
@@ -145,7 +146,11 @@ export async function voteSlot(
   if (!voted.meta.changes && !(await isOpen(db, slotId, now))) return { ok: false, reason: "closed" };
   const gatheringId = await tryWin(db, slotId);
   // GAT-02 and В10 (assumption): hosting is offered straight away, alongside any venue request.
-  if (gatheringId) await offerHostToNext(db, gatheringId, now);
+  if (gatheringId) {
+    await offerHostToNext(db, gatheringId, now);
+    // PLC-03: an indoor card asks its first venue; this does nothing for a public card.
+    await requestNextVenue(db, gatheringId, now);
+  }
   return { ok: true, gatheringId };
 }
 

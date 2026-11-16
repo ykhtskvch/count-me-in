@@ -126,3 +126,20 @@ test("moderator screens need a moderator", async () => {
   const response = await render("/moderate");
   assert.equal(response.status, 200);
 });
+
+test("venue request page and API refuse a malformed link without touching anything", async () => {
+  assert.equal((await render("/venue?token=abc")).status, 200);
+  assert.equal((await render("/api/venue-request?token=abc")).status, 404);
+  assert.equal((await post("/api/venue-request", { token: "abc", approve: true })).status, 400);
+});
+
+test("suggest, settings and the new moderator APIs render or refuse without an account", async () => {
+  assert.match(await (await render("/suggest")).text(), /Suggest an activity/);
+  assert.equal((await render("/settings")).status, 200);
+  assert.equal((await post("/api/activities", { title: "x" })).status, 400);
+  assert.equal((await post("/api/activities", { title: "Sock darning", outcome: "Socks", minPeople: 3, maxPeople: 6, durationHours: 2, placeKind: "venue" })).status, 401);
+  for (const path of ["/api/mod/review", "/api/mod/reports", "/api/mod/metrics", "/api/settings"]) {
+    assert.equal((await render(path)).status, 401, path);
+  }
+  assert.equal((await render("/api/account", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirm: "no" }) })).status, 400);
+});
