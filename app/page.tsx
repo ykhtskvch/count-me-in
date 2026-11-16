@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { Catalogue } from "./components/catalogue";
+
 export default function Home() {
   return (
     <main>
@@ -12,7 +15,9 @@ export default function Home() {
         <li>When enough neighbours are in, we suggest a few evenings.</li>
         <li>The first evening to fill up happens, at a checked public place.</li>
       </ol>
-      <p>Coming soon.</p>
+      <h2>Activities</h2>
+      <Catalogue />
+      <p className="small"><Link href="/signin">Sign in</Link> to say Count me in. Activities near you are shown first.</p>
     </main>
   );
 }

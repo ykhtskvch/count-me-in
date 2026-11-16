@@ -36,6 +36,8 @@ npm run check       # TypeScript
 npm run lint
 ```
 
+Database tests (`tests/rounds.test.ts`) run the real migrations on Node's built-in SQLite through a small D1 stand-in in `tests/helpers/d1.ts`.
+
 After changing `db/schema.ts`, run `npm run db:generate` to write a new migration.
 
 ## What is here
@@ -45,7 +47,9 @@ After changing `db/schema.ts`, run `npm run db:generate` to write a new migratio
 | `db/schema.ts`, `drizzle/0000_init.sql` | Data model: 15 tables; the database itself refuses two gatherings from one round and a scheduled gathering without a place or host | 0.2 |
 | `lib/card-state.ts` | Card lifecycle and the only allowed transitions | 0.3 |
 | `lib/settings.ts` | Default timings and limits; values the PRD does not give are marked as assumptions | 0.7 |
-| `app/` | Placeholder landing page | 0.1 |
+| `lib/catalogue.ts`, `db/activities.ts` | Catalogue order, "still needed" counter, rough times; interest is accepted only while a card is in the catalogue or choosing | 2.1–2.3, 3.1–3.3 |
+| `lib/slots.ts`, `db/rounds.ts` | Picking evenings: slot proposal (London time, venue windows), first slot to reach the minimum wins, picking closes 3 days before the first slot | 4.1–4.4 |
+| `app/page.tsx`, `app/activity/[id]/` | Catalogue and the activity page with Count me in / I'm out | 2.1–2.3, 3.1–3.3 |
 
 ## Hosting
 
