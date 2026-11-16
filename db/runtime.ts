@@ -99,3 +99,11 @@ export async function getSession(request: Request): Promise<Session | null> {
 export function json(data: unknown, status = 200): Response {
   return Response.json(data, { status, headers: { "cache-control": "no-store" } });
 }
+
+/** Moderator-only routes: 401 when signed out, 403 for everyone who is not a moderator. */
+export async function requireModerator(request: Request): Promise<{ person: Person } | { error: Response }> {
+  const session = await getSession(request);
+  if (!session?.person) return { error: json({ error: "Sign in as a moderator." }, 401) };
+  if (session.person.role !== "moderator") return { error: json({ error: "Only moderators can do this." }, 403) };
+  return { person: session.person };
+}
